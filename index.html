@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prog Rank</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #171717; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #525252; }
+
+        /* Dragging Classes */
+        .dragging { opacity: 0.5; border: 2px dashed #a855f7; }
+        
+        /* Animation */
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+        .notification-toast { animation: fadeInOut 3s forwards; }
+
+        /* Range Slider */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%; background: #a855f7;
+            cursor: pointer; margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer; background: #404040;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-neutral-900 text-neutral-100 h-screen flex flex-col overflow-hidden selection:bg-purple-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="p-4 border-b border-neutral-800 flex flex-col md:flex-row gap-4 md:items-center justify-between z-10 bg-neutral-900/95 backdrop-blur shrink-0 transition-all duration-300" id="header-container">
+        <!-- Injected by JS -->
+    </header>
+    
+    <!-- Global Search Results -->
+    <div id="global-search-results" class="absolute top-[80px] left-4 right-4 md:left-20 md:w-96 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 hidden max-h-96 overflow-y-auto custom-scrollbar"></div>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="flex-1 relative overflow-hidden w-full h-full">
+        <!-- Content injected by JS -->
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Modal: Setup (First Time) -->
+    <div id="setup-modal-overlay" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden p-8">
+            <h1 class="text-3xl font-black text-center mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">Welcome to Prog Rank</h1>
+            <p class="text-center text-neutral-400 mb-8">How would you like to rank your music? This choice is <strong>irreversible</strong> for your main list.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button onclick="selectMainListType('albums')" class="group p-6 rounded-xl bg-neutral-800 border-2 border-neutral-700 hover:border-purple-500 hover:bg-neutral-800/80 transition-all text-left relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-12 h-12 bg-neutral-900 rounded-full flex items-center justify-center mb-4 text-purple-400 group-hover:scale-110 transition-transform"><i data-lucide="disc" class="w-6 h-6"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-2">Album Mode</h3>
+                    <p class="text-sm text-neutral-400 leading-relaxed">Rank entire albums. Click on an album to open it and rank its individual songs.</p>
+                    <ul class="mt-4 space-y-2 text-xs text-neutral-500">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Deep Discography Organization</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Best for Album Listeners</li>
+                    </ul>
+                </button>
+
+                <button onclick="selectMainListType('songs')" class="group p-6 rounded-xl bg-neutral-800 border-2 border-neutral-700 hover:border-blue-500 hover:bg-neutral-800/80 transition-all text-left relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-12 h-12 bg-neutral-900 rounded-full flex items-center justify-center mb-4 text-blue-400 group-hover:scale-110 transition-transform"><i data-lucide="music" class="w-6 h-6"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-2">Song Mode</h3>
+                    <p class="text-sm text-neutral-400 leading-relaxed">Rank individual songs directly on the main list. Simple and direct.</p>
+                    <ul class="mt-4 space-y-2 text-xs text-neutral-500">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Casual / Normie Friendly</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Cover Art Optional</li>
+                    </ul>
+                </button>
+            </div>
+            <p class="mt-6 text-xs text-center text-neutral-600">This will configure your "Main List" and Global Ranking logic.</p>
+        </div>
+    </div>
+
+    <!-- Modal: Add/Edit Item -->
+    <div id="modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200 flex flex-col max-h-[90vh]" id="modal-content">
+            <div class="p-6 overflow-y-auto custom-scrollbar">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modal-title" class="text-2xl font-bold">Add New Item</h2>
+                    <button id="btn-close-modal" class="text-neutral-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <!-- Library Search -->
+                <div id="library-search-section" class="mb-6 hidden">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500"></i>
+                        <input type="text" id="input-search-library" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg pl-10 pr-4 py-2 text-white placeholder-neutral-500 text-sm" placeholder="Search library...">
+                    </div>
+                    <div id="library-results" class="mt-2 space-y-2 max-h-40 overflow-y-auto custom-scrollbar hidden"></div>
+                    <div class="mt-4 flex items-center gap-2">
+                        <div class="h-px bg-neutral-800 flex-1"></div>
+                        <span class="text-xs text-neutral-500 uppercase">Or Create New</span>
+                        <div class="h-px bg-neutral-800 flex-1"></div>
+                    </div>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="space-y-4">
+                    <!-- Image -->
+                    <div class="flex flex-col items-center mb-4" id="cover-section">
+                        <div id="cover-upload-trigger" class="w-32 h-32 rounded-xl bg-neutral-800 border-2 border-dashed border-neutral-600 hover:border-purple-500 hover:bg-neutral-800/80 cursor-pointer flex flex-col items-center justify-center transition-all overflow-hidden relative group mb-3">
+                            <div id="cover-preview-container" class="w-full h-full absolute inset-0 hidden">
+                                <img id="cover-preview" src="" alt="Preview" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i data-lucide="upload" class="w-6 h-6 text-white"></i>
+                                </div>
+                            </div>
+                            <div id="cover-placeholder" class="flex flex-col items-center">
+                                <i data-lucide="image" class="w-8 h-8 text-neutral-500 mb-2"></i>
+                                <span class="text-xs text-neutral-400" id="cover-label-text">Cover Art *</span>
+                            </div>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/*">
+                        <div class="w-full relative" id="cover-url-container">
+                            <i data-lucide="link" class="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500"></i>
+                            <input type="text" id="input-cover-url" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-neutral-500" placeholder="Or paste image URL...">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1" id="label-title">Title <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-title" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="e.g. In Rainbows">
+                    </div>
+
+                    <div id="field-artist-container" class="relative">
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Artist <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-artist" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="Search or Type Artist...">
+                        <div id="artist-suggestions" class="absolute left-0 right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 hidden max-h-32 overflow-y-auto custom-scrollbar"></div>
+                    </div>
+
+                    <div id="field-link-container">
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Spotify Link (Optional)</label>
+                        <input type="text" id="input-link" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="https://open.spotify.com/...">
+                    </div>
+
+                    <!-- Remarks Field -->
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Remarks / Review</label>
+                        <textarea id="input-remarks" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none text-sm resize-none h-20" placeholder="Your thoughts..."></textarea>
+                    </div>
+
+                    <div class="pt-4 flex gap-3">
+                        <button id="btn-delete" class="hidden flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors">
+                            Delete
+                        </button>
+                        <button id="btn-save" class="flex-1 bg-white text-black hover:bg-neutral-200 py-2.5 rounded-lg font-bold transition-colors">
+                            Add to Line
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Create/Import List -->
+    <div id="list-modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold" id="list-modal-heading">Create New List</h2>
+                    <button id="btn-close-list-modal" class="text-neutral-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div class="flex gap-4 mb-4 border-b border-neutral-800 pb-2" id="list-modal-tabs">
+                    <button id="tab-create" class="text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5">Create</button>
+                    <button id="tab-import" class="text-sm font-bold text-neutral-500 hover:text-white pb-2">Import JSON</button>
+                </div>
+
+                <div id="view-create-list" class="space-y-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">List Name</label>
+                        <input type="text" id="input-list-name" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="e.g. 2024 Favorites">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-list-type" value="albums" class="peer sr-only" checked>
+                            <div class="p-3 rounded-lg border border-neutral-700 bg-neutral-800 peer-checked:border-purple-500 peer-checked:bg-purple-500/10 transition-all text-center">
+                                <span class="font-bold text-sm block">Albums</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-list-type" value="songs" class="peer sr-only">
+                            <div class="p-3 rounded-lg border border-neutral-700 bg-neutral-800 peer-checked:border-blue-500 peer-checked:bg-blue-500/10 transition-all text-center">
+                                <span class="font-bold text-sm block">Songs</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button id="btn-create-list" class="w-full bg-white text-black hover:bg-neutral-200 py-2.5 rounded-lg font-bold transition-colors mt-4">Create List</button>
+                </div>
+
+                <div id="view-import-list" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Paste List Data (JSON)</label>
+                        <textarea id="input-import-json" class="w-full h-32 bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none text-xs font-mono" placeholder='{"name": "My List", "items": [...]}'></textarea>
+                    </div>
+                    <button id="btn-import-list" class="w-full bg-purple-600 text-white hover:bg-purple-500 py-2.5 rounded-lg font-bold transition-colors mt-4">Import List</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: List Options -->
+    <div id="list-options-modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">List Settings</h2>
+                    <button id="btn-close-options-modal" class="text-neutral-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Rename</label>
+                        <input type="text" id="input-rename-list" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-2">Card Color</label>
+                        <div class="flex gap-2 flex-wrap" id="color-picker-container"></div>
+                    </div>
+                    <div class="pt-4 border-t border-neutral-800 mt-4 space-y-2">
+                        <button id="btn-pin-list" class="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="pin" class="w-4 h-4"></i> Pin to Top
+                        </button>
+                        <button id="btn-share-list" class="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="share-2" class="w-4 h-4"></i> Share / Copy JSON
+                        </button>
+                        <button id="btn-delete-list" class="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete List
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Artist Profile Pic Upload -->
+    <input type="file" id="artist-pic-input" class="hidden" accept="image/*">
+
+    <script>
+        const STORAGE_KEY = 'prog_rank_data_v1';
+        const LIST_COLORS = ['bg-neutral-800', 'bg-red-900/40', 'bg-orange-900/40', 'bg-amber-900/40', 'bg-green-900/40', 'bg-emerald-900/40', 'bg-teal-900/40', 'bg-cyan-900/40', 'bg-sky-900/40', 'bg-blue-900/40', 'bg-indigo-900/40', 'bg-violet-900/40', 'bg-purple-900/40', 'bg-fuchsia-900/40', 'bg-pink-900/40', 'bg-rose-900/40'];
+
+        const generateId = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+            return 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        };
+
+        const showToast = (message) => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'bg-neutral-800 border border-neutral-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 notification-toast pointer-events-auto';
+            toast.innerHTML = `<i data-lucide="info" class="w-5 h-5 text-purple-400"></i> <span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons({ root: toast });
+            setTimeout(() => toast.remove(), 3000);
+        };
+
+        let state = {
+            mainListType: null, // 'albums' | 'songs'
+            library: [],
+            lists: [],
+            artists: {}, 
+            
+            history: [], 
+            currentView: 'dashboard', 
+            activeListId: null,
+            activeAlbumId: null,
+            activeArtistName: null,
+            
+            viewMode: 'horizontal',
+            showMetrics: false,
+            zoomLevel: 1,
+            isReadOnly: false, 
+            globalSort: 'avg', // 'avg' | 'user'
+            calibrateGlobal: false, // NEW
+            
+            isDragging: false,
+            draggedId: null,
+            dragStartX: 0,
+            isClickCandidate: false,
+            
+            modalOpen: false,
+            editMode: false,
+            editId: null,
+            tempItem: { title: '', artist: '', link: '', cover: '', remarks: '' },
+            originalItemForEdit: null,
+            
+            listModalOpen: false,
+            listOptionsOpen: false,
+            optionsListId: null,
+            deleteConfirmState: false,
+            draggedListIdx: null
+        };
+
+        // DOM Element References (Cached)
+        const els = {
+            header: document.getElementById('header-container'),
+            mainContent: document.getElementById('main-content'),
+            searchResults: document.getElementById('global-search-results'),
+            setupModalOverlay: document.getElementById('setup-modal-overlay'),
+            modalOverlay: document.getElementById('modal-overlay'),
+            modalContent: document.getElementById('modal-content'),
+            modalTitle: document.getElementById('modal-title'),
+            btnCloseModal: document.getElementById('btn-close-modal'),
+            coverSection: document.getElementById('cover-section'),
+            coverTrigger: document.getElementById('cover-upload-trigger'),
+            fileInput: document.getElementById('file-input'),
+            inputCoverUrl: document.getElementById('input-cover-url'),
+            coverUrlContainer: document.getElementById('cover-url-container'),
+            coverPreviewContainer: document.getElementById('cover-preview-container'),
+            coverPreview: document.getElementById('cover-preview'),
+            coverPlaceholder: document.getElementById('cover-placeholder'),
+            coverLabelText: document.getElementById('cover-label-text'),
+            inputTitle: document.getElementById('input-title'),
+            inputArtist: document.getElementById('input-artist'),
+            artistSuggestions: document.getElementById('artist-suggestions'),
+            inputLink: document.getElementById('input-link'),
+            inputRemarks: document.getElementById('input-remarks'),
+            fieldArtist: document.getElementById('field-artist-container'),
+            fieldLink: document.getElementById('field-link-container'),
+            labelTitle: document.getElementById('label-title'),
+            btnSave: document.getElementById('btn-save'),
+            btnDelete: document.getElementById('btn-delete'),
+            searchSection: document.getElementById('library-search-section'),
+            inputSearchLib: document.getElementById('input-search-library'),
+            libraryResults: document.getElementById('library-results'),
+            listModalOverlay: document.getElementById('list-modal-overlay'),
+            btnCloseListModal: document.getElementById('btn-close-list-modal'),
+            inputListName: document.getElementById('input-list-name'),
+            inputImportJson: document.getElementById('input-import-json'),
+            btnCreateList: document.getElementById('btn-create-list'),
+            btnImportList: document.getElementById('btn-import-list'),
+            tabCreate: document.getElementById('tab-create'),
+            tabImport: document.getElementById('tab-import'),
+            viewCreateList: document.getElementById('view-create-list'),
+            viewImportList: document.getElementById('view-import-list'),
+            listModalHeading: document.getElementById('list-modal-heading'),
+            listOptionsOverlay: document.getElementById('list-options-modal-overlay'),
+            btnCloseOptionsModal: document.getElementById('btn-close-options-modal'),
+            inputRenameList: document.getElementById('input-rename-list'),
+            colorPickerContainer: document.getElementById('color-picker-container'),
+            btnDeleteList: document.getElementById('btn-delete-list'),
+            btnShareList: document.getElementById('btn-share-list'),
+            btnPinList: document.getElementById('btn-pin-list'),
+            artistPicInput: document.getElementById('artist-pic-input')
+        };
+
+        // --- Core Functions ---
+
+        function init() {
+            // VibeScale V5 -> Prog Rank V1 migration
+            const legacyKey = 'album_ranker_data_v5';
+            const savedLegacy = localStorage.getItem(legacyKey);
+            const saved = localStorage.getItem(STORAGE_KEY);
+            
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                state.library = parsed.library || [];
+                state.lists = parsed.lists || [];
+                state.artists = parsed.artists || {};
+                state.mainListType = parsed.mainListType || null;
+            } else if (savedLegacy) {
+                // Migration
+                const parsed = JSON.parse(savedLegacy);
+                state.library = parsed.library || [];
+                state.lists = parsed.lists || [];
+                state.artists = parsed.artists || {};
+                // Legacy users are assumed to be using 'albums' mode
+                state.mainListType = 'albums';
+                state.lists.forEach(l => l.type = 'albums');
+            }
+
+            // Check Setup
+            if (!state.mainListType) {
+                // If we have lists but no type (unlikely due to above, but safe check), default to albums
+                if (state.lists.length > 0 && state.lists[0].items.length > 0) {
+                    state.mainListType = 'albums';
+                    state.lists.forEach(l => l.type = 'albums');
+                } else {
+                    // Show Setup Modal
+                    renderSetupModal();
+                }
+            }
+
+            if (!state.lists.some(l => l.isMain)) {
+                // Create default if missing
+                if(state.mainListType) {
+                   createDefaultMainList();
+                }
+            }
+            
+            setupEventListeners();
+            render();
+            renderColorPicker();
+        }
+
+        function createDefaultMainList() {
+            state.lists.push({
+                id: generateId(),
+                name: state.mainListType === 'albums' ? "My Album Rankings" : "My Song Rankings",
+                items: [],
+                color: 'bg-neutral-800',
+                isMain: true,
+                isPinned: true,
+                type: state.mainListType
+            });
+            saveData();
+        }
+
+        function selectMainListType(type) {
+            state.mainListType = type;
+            els.setupModalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.setupModalOverlay.classList.add('hidden'), 200);
+            
+            // Wipe lists and start fresh if they had nothing (which they shouldnt if they saw modal)
+            state.lists = [];
+            createDefaultMainList();
+            saveData();
+            render();
+        }
+
+        function renderSetupModal() {
+            els.setupModalOverlay.classList.remove('hidden');
+            setTimeout(() => els.setupModalOverlay.classList.remove('opacity-0'), 10);
+            lucide.createIcons({ root: els.setupModalOverlay });
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                library: state.library,
+                lists: state.lists,
+                artists: state.artists,
+                mainListType: state.mainListType
+            }));
+            render();
+        }
+
+        function saveDataNoRender() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                library: state.library,
+                lists: state.lists,
+                artists: state.artists,
+                mainListType: state.mainListType
+            }));
+        }
+
+        function renderColorPicker() {
+            els.colorPickerContainer.innerHTML = '';
+            LIST_COLORS.forEach(color => {
+                const btn = document.createElement('button');
+                btn.className = `w-8 h-8 rounded-full ${color} border-2 border-transparent hover:border-white transition-all`;
+                btn.onclick = () => updateListColor(color);
+                els.colorPickerContainer.appendChild(btn);
+            });
+        }
+
+        function getArtistStats(artistName) {
+            const mainList = state.lists.find(l => l.isMain);
+            if (!mainList) return { avg: 0, count: 0 };
+            
+            const artistItems = mainList.items.filter(i => i.artist.toLowerCase() === artistName.toLowerCase());
+            
+            if (artistItems.length === 0) return { avg: 0, count: 0 };
+            
+            // Logic differs by mode
+            if (state.mainListType === 'albums') {
+                const total = artistItems.reduce((sum, alb) => sum + alb.score, 0);
+                return {
+                    avg: (total / artistItems.length).toFixed(1),
+                    count: artistItems.length
+                };
+            } else {
+                // Song Mode
+                // Items ARE songs
+                const total = artistItems.reduce((sum, song) => sum + song.score, 0);
+                return {
+                    avg: (total / artistItems.length).toFixed(1),
+                    count: artistItems.length
+                };
+            }
+        }
+
+        function getArtistProfilePic(artistName) {
+            const artistData = state.artists[artistName];
+            if (artistData && artistData.profilePic) return artistData.profilePic;
+            
+            // Fallback to highest rated album/song cover
+            const matches = state.library.filter(l => l.artist.toLowerCase() === artistName.toLowerCase() && l.cover);
+            if (matches.length > 0) return matches[0].cover;
+            return null;
+        }
+
+        // --- Navigation ---
+        function navigateTo(view, params = {}) {
+            state.history.push({
+                view: state.currentView,
+                activeListId: state.activeListId,
+                activeAlbumId: state.activeAlbumId,
+                activeArtistName: state.activeArtistName,
+                isReadOnly: state.isReadOnly,
+                zoomLevel: state.zoomLevel,
+                calibrateGlobal: state.calibrateGlobal
+            });
+
+            state.currentView = view;
+            state.activeListId = params.listId || null;
+            state.activeAlbumId = params.albumId || null;
+            state.activeArtistName = params.artistName || null;
+            state.isReadOnly = params.readOnly || false;
+            state.zoomLevel = params.zoom || 1;
+            
+            els.searchResults.classList.add('hidden');
+            render();
+        }
+
+        function goBack() {
+            if (state.history.length > 0) {
+                const prev = state.history.pop();
+                state.currentView = prev.view;
+                state.activeListId = prev.activeListId;
+                state.activeAlbumId = prev.activeAlbumId;
+                state.activeArtistName = prev.activeArtistName;
+                state.isReadOnly = prev.isReadOnly;
+                state.zoomLevel = prev.zoomLevel;
+                state.calibrateGlobal = prev.calibrateGlobal;
+                render();
+            } else {
+                goHome(); 
+            }
+        }
+
+        function goHome() {
+            state.history = []; 
+            state.currentView = 'dashboard';
+            state.activeListId = null;
+            state.activeAlbumId = null;
+            state.activeArtistName = null;
+            state.isReadOnly = false;
+            els.searchResults.classList.add('hidden');
+            render();
+        }
+
+        function goToList(listId) {
+            navigateTo('list', { listId });
+        }
+
+        function goToAlbum(albumId, listId = null) {
+            // Only valid for Album lists
+            const list = state.lists.find(l => l.id === (listId || state.activeListId));
+            if (list && list.type === 'songs') {
+                // If song mode, maybe open details modal instead of navigating
+                const song = list.items.find(i => i.id === albumId);
+                if(song) openModal(song);
+                return;
+            }
+            const lid = listId || state.activeListId;
+            navigateTo('album', { albumId, listId: lid });
+        }
+
+        function goToArtistProfile(artistName) {
+            navigateTo('artistProfile', { artistName });
+        }
+
+        function goToArtistAutoList(type) {
+            // Type: 'albums' or 'songs'
+            // If main list is songs, 'albums' auto list is impossible.
+            if (state.mainListType === 'songs' && type === 'albums') return;
+            navigateTo('artistAutoList', { listId: 'auto-' + type, readOnly: true, artistName: state.activeArtistName });
+        }
+
+        function goToComparison() {
+            navigateTo('comparison', { artistName: state.activeArtistName });
+        }
+
+        function goToGlobalArtistRankings() {
+            navigateTo('globalArtistRankings');
+        }
+
+        // --- Data Helpers ---
+        function getActiveList() {
+            if (state.activeListId && state.activeListId.startsWith('auto-')) {
+                const mainList = state.lists.find(l => l.isMain) || state.lists[0];
+                const artistName = state.activeArtistName;
+                
+                if (state.activeListId === 'auto-albums') {
+                    const artistAlbums = mainList.items.filter(i => i.artist.toLowerCase() === artistName.toLowerCase());
+                    return { name: `${artistName} Albums (Main)`, items: artistAlbums, isAuto: true, type: 'albums' };
+                } else if (state.activeListId === 'auto-songs') {
+                    // If Main List is Albums: Aggregate songs from albums
+                    // If Main List is Songs: Just filter songs
+                    if (state.mainListType === 'albums') {
+                        const artistAlbums = mainList.items.filter(i => i.artist.toLowerCase() === artistName.toLowerCase());
+                        let allSongs = [];
+                        artistAlbums.forEach(alb => {
+                            if(alb.songs) allSongs = allSongs.concat(alb.songs.map(s => ({...s, cover: alb.cover, artist: artistName})));
+                        });
+                        return { name: `${artistName} Songs (Main)`, items: allSongs, isAuto: true, type: 'songs' };
+                    } else {
+                         const artistSongs = mainList.items.filter(i => i.artist.toLowerCase() === artistName.toLowerCase());
+                         return { name: `${artistName} Songs (Main)`, items: artistSongs, isAuto: true, type: 'songs' };
+                    }
+                }
+            }
+            return state.lists.find(l => l.id === state.activeListId);
+        }
+
+        function getActiveAlbum() {
+            const list = getActiveList();
+            if (!list) return null;
+            if (list.type === 'songs' || state.activeListId === 'auto-songs') return null;
+            return list.items.find(a => a.id === state.activeAlbumId);
+        }
+
+        function getCurrentItems() {
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                return album ? album.songs : [];
+            } else if (state.currentView === 'list' || state.currentView === 'artistAutoList') {
+                const list = getActiveList();
+                return list ? list.items : [];
+            }
+            return [];
+        }
+
+        function getStats() {
+            const list = getCurrentItems();
+            if (!list || list.length === 0) return { min: 0, max: 100, range: 100 };
+            const scores = list.map(a => a.score);
+            const min = Math.min(0, ...scores);
+            const max = Math.max(100, ...scores);
+            return { min, max, range: max - min };
+        }
+
+        function getMetric(score) {
+            const { min, range } = getStats();
+            const normalized = (score - min) / range;
+            return (normalized * 10).toFixed(1);
+        }
+
+        function getDynamicSize() {
+            const { range } = getStats();
+            const baseSize = 56;
+            const scaleFactor = Math.sqrt(100 / Math.max(100, range));
+            return Math.max(24, baseSize * scaleFactor);
+        }
+
+        // --- View Actions ---
+        function toggleMetrics() {
+            state.showMetrics = !state.showMetrics;
+            render();
+        }
+
+        function toggleCalibration() {
+            state.calibrateGlobal = !state.calibrateGlobal;
+            render();
+        }
+
+        function setViewMode(mode) {
+            state.viewMode = mode;
+            render();
+        }
+
+        function zoomIn() {
+            if (state.zoomLevel < 5) {
+                state.zoomLevel += 0.5;
+                render();
+            }
+        }
+
+        function zoomOut() {
+            if (state.zoomLevel > 1) {
+                state.zoomLevel -= 0.5;
+                render();
+            }
+        }
+
+        function setGlobalSort(type) {
+            state.globalSort = type;
+            render();
+        }
+
+        function deleteArtist(artistName) {
+            const safeName = artistName.replace(/'/g, "\\'");
+            if(confirm(`Are you sure you want to delete ${artistName}? This will not remove their items from lists.`)) {
+                delete state.artists[artistName];
+                saveData();
+                if(state.currentView === 'artistProfile' && state.activeArtistName === artistName) {
+                    goBack();
+                }
+                showToast("Artist profile data deleted.");
+            }
+        }
+
+        function openDiscographyList() {
+            const artistName = state.activeArtistName;
+            const listName = `Discography: ${artistName}`;
+            let list = state.lists.find(l => l.name === listName);
+
+            // Determine list type based on library content
+            // The library structure depends on how items were added.
+            // If main list is songs, library has songs. If albums, library has albums.
+            // We'll trust state.mainListType for the created list type.
+            
+            if (!list) {
+                const artistItems = state.library.filter(a => a.artist.toLowerCase() === artistName.toLowerCase());
+                
+                if (artistItems.length === 0) {
+                    showToast("No items found for this artist in library.");
+                    return;
+                }
+                
+                list = {
+                    id: generateId(),
+                    name: listName,
+                    color: 'bg-neutral-800',
+                    type: state.mainListType || 'albums',
+                    items: artistItems.map(libItem => ({
+                        id: generateId(),
+                        score: 50,
+                        color: 'from-gray-700 to-gray-900',
+                        title: libItem.title,
+                        artist: libItem.artist,
+                        cover: libItem.cover,
+                        link: libItem.link,
+                        songs: libItem.defaultSongs ? JSON.parse(JSON.stringify(libItem.defaultSongs)) : []
+                    }))
+                };
+                state.lists.push(list);
+                saveData();
+                showToast(`Created new list: ${listName}`);
+            } else {
+                // Sync from library
+                const artistItems = state.library.filter(a => a.artist.toLowerCase() === artistName.toLowerCase());
+                let addedCount = 0;
+                artistItems.forEach(libItem => {
+                    const exists = list.items.find(i => i.title.toLowerCase() === libItem.title.toLowerCase());
+                    if (!exists) {
+                        list.items.push({
+                            id: generateId(),
+                            score: 50,
+                            color: 'from-gray-700 to-gray-900',
+                            title: libItem.title,
+                            artist: libItem.artist,
+                            cover: libItem.cover,
+                            link: libItem.link,
+                            songs: libItem.defaultSongs ? JSON.parse(JSON.stringify(libItem.defaultSongs)) : []
+                        });
+                        addedCount++;
+                    }
+                });
+                if(addedCount > 0) {
+                    saveData();
+                    showToast(`Added ${addedCount} new items to list.`);
+                }
+            }
+            
+            goToList(list.id);
+        }
+
+        // --- List Modal Functions ---
+        function openListModal() {
+            setListModalTab('create');
+            els.listModalOverlay.classList.remove('hidden');
+            setTimeout(() => els.listModalOverlay.classList.remove('opacity-0'), 10);
+        }
+
+        function closeListModal() {
+            els.listModalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.listModalOverlay.classList.add('hidden'), 200);
+        }
+
+        function setListModalTab(tab) {
+            if (tab === 'create') {
+                els.tabCreate.className = 'text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5';
+                els.tabImport.className = 'text-sm font-bold text-neutral-500 hover:text-white pb-2';
+                els.viewCreateList.classList.remove('hidden');
+                els.viewImportList.classList.add('hidden');
+                els.listModalHeading.innerText = 'Create New List';
+                els.inputListName.value = '';
+                els.inputListName.focus();
+                // Reset radio to mainListType or 'albums'
+                const radios = document.getElementsByName('new-list-type');
+                for(let r of radios) {
+                    if (r.value === (state.mainListType || 'albums')) r.checked = true;
+                }
+            } else {
+                els.tabImport.className = 'text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5';
+                els.tabCreate.className = 'text-sm font-bold text-neutral-500 hover:text-white pb-2';
+                els.viewImportList.classList.remove('hidden');
+                els.viewCreateList.classList.add('hidden');
+                els.listModalHeading.innerText = 'Import List';
+                els.inputImportJson.value = '';
+                els.inputImportJson.focus();
+            }
+        }
+
+        function createNewList() {
+            const name = els.inputListName.value.trim();
+            if (!name) return;
+            const typeRadio = document.querySelector('input[name="new-list-type"]:checked');
+            const type = typeRadio ? typeRadio.value : 'albums';
+
+            state.lists.push({
+                id: generateId(),
+                name: name,
+                items: [],
+                color: 'bg-neutral-800',
+                type: type
+            });
+            saveData();
+            closeListModal();
+        }
+
+        function importList() {
+            try {
+                const json = els.inputImportJson.value.trim();
+                if(!json) return;
+                
+                const data = JSON.parse(json);
+                if (!data.items || !Array.isArray(data.items)) throw new Error("Invalid Format");
+
+                let baseName = data.name || "Imported List";
+                let newName = baseName;
+                let counter = 1;
+                while(state.lists.find(l => l.name === newName)) {
+                    counter++;
+                    newName = `${baseName} ${counter}`;
+                }
+
+                // Try to infer type if missing (check for songs property in items)
+                let type = data.type || 'albums';
+                if (!data.type && data.items.length > 0) {
+                     // Heuristic: if items have 'songs' array that is not empty, it's albums.
+                     // But some albums have 0 songs. 
+                     // Default to albums if ambiguous.
+                }
+
+                const newItems = data.items.map(item => ({
+                    ...item,
+                    id: generateId(),
+                    songs: (item.songs || []).map(s => ({ ...s, id: generateId() }))
+                }));
+
+                newItems.forEach(item => addToLibrary(item));
+
+                state.lists.push({
+                    id: generateId(),
+                    name: newName,
+                    color: data.color || 'bg-neutral-800',
+                    items: newItems,
+                    type: type
+                });
+
+                saveData();
+                closeListModal();
+                showToast(`Imported "${newName}" successfully!`);
+            } catch (e) {
+                alert("Invalid JSON format.");
+            }
+        }
+
+        // --- Modals & CRUD ---
+        function openModal(item = null) {
+            state.modalOpen = true;
+            state.editMode = !!item;
+            state.editId = item ? item.id : null;
+            
+            if (item) {
+                state.tempItem = { ...item, remarks: item.remarks || '' };
+                state.originalItemForEdit = { ...item };
+            } else {
+                state.tempItem = { title: '', artist: '', link: '', cover: '', remarks: '' };
+                state.originalItemForEdit = null;
+            }
+            updateModalUI();
+            els.modalOverlay.classList.remove('hidden');
+            setTimeout(() => els.modalOverlay.classList.remove('opacity-0'), 10);
+        }
+
+        function closeModal() {
+            state.modalOpen = false;
+            els.modalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.modalOverlay.classList.add('hidden'), 200);
+            els.artistSuggestions.classList.add('hidden');
+        }
+
+        function updateModalUI() {
+            const list = getActiveList();
+            const listType = list ? list.type : 'albums';
+            const isSongInAlbumView = state.currentView === 'album'; // Viewing songs inside an album
+            const isSongModeList = listType === 'songs';
+
+            // Title Label
+            if (isSongInAlbumView || isSongModeList) {
+                els.modalTitle.innerText = state.editMode ? 'Edit Song' : 'Add Song';
+                els.labelTitle.innerHTML = 'Song Title <span class="text-red-500">*</span>';
+                els.inputTitle.placeholder = "e.g. Reckoner";
+            } else {
+                els.modalTitle.innerText = state.editMode ? 'Edit Album' : 'Add Album';
+                els.labelTitle.innerHTML = 'Album Title <span class="text-red-500">*</span>';
+                els.inputTitle.placeholder = "e.g. In Rainbows";
+            }
+            
+            if (state.isReadOnly) els.modalTitle.innerText = 'View Details';
+
+            // Visibility
+            // Library Search: Only if adding new item in List View (not song-in-album view)
+            els.searchSection.classList.toggle('hidden', state.editMode || isSongInAlbumView || state.isReadOnly);
+            
+            // Cover: Optional for songs, required for albums (UI indication)
+            els.coverSection.classList.toggle('hidden', isSongInAlbumView); // Hide cover for song-in-album
+            if (isSongModeList) {
+                els.coverLabelText.innerText = "Cover Art (Optional)";
+            } else {
+                els.coverLabelText.innerText = "Cover Art *";
+            }
+
+            // Artist: Hidden for song-in-album, Required for List Items
+            els.fieldArtist.classList.toggle('hidden', isSongInAlbumView);
+            
+            // Link/Remarks always visible
+            
+            // Populate
+            els.inputTitle.value = state.tempItem.title || '';
+            els.inputArtist.value = state.tempItem.artist || '';
+            els.inputLink.value = state.tempItem.link || '';
+            els.inputRemarks.value = state.tempItem.remarks || '';
+            
+            const isBase64 = state.tempItem.cover && state.tempItem.cover.startsWith('data:');
+            els.inputCoverUrl.value = isBase64 ? '' : (state.tempItem.cover || '');
+
+            if (state.tempItem.cover && !isSongInAlbumView) {
+                els.coverPreview.src = state.tempItem.cover;
+                els.coverPreviewContainer.classList.remove('hidden');
+                els.coverPlaceholder.classList.add('hidden');
+            } else {
+                els.coverPreviewContainer.classList.add('hidden');
+                els.coverPlaceholder.classList.remove('hidden');
+            }
+
+            // Read Only Handling
+            if (state.isReadOnly) {
+                els.btnSave.classList.add('hidden');
+                els.btnDelete.classList.add('hidden');
+                els.inputTitle.disabled = true;
+                els.inputArtist.disabled = true;
+                els.inputRemarks.disabled = true;
+                els.inputLink.disabled = true;
+            } else {
+                els.btnSave.classList.remove('hidden');
+                els.btnDelete.classList.toggle('hidden', !state.editMode);
+                els.inputTitle.disabled = false;
+                els.inputArtist.disabled = false;
+                els.inputRemarks.disabled = false;
+                els.inputLink.disabled = false;
+            }
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    state.tempItem.cover = reader.result;
+                    els.inputCoverUrl.value = '';
+                    updateModalUI();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveItem() {
+            const list = getActiveList();
+            const listType = list ? list.type : 'albums';
+            const isSongInAlbumView = state.currentView === 'album';
+
+            // Validation
+            if (!state.tempItem.title) return showToast("Title is required!");
+            
+            // Artist Check
+            if (!isSongInAlbumView && !state.isReadOnly && !state.tempItem.artist) return showToast("Artist is required!");
+            
+            // Cover Logic
+            const urlValue = els.inputCoverUrl.value.trim();
+            if (urlValue) state.tempItem.cover = urlValue;
+            
+            // Cover Validation
+            if (!isSongInAlbumView && !state.editMode && !state.tempItem.cover && listType === 'albums') {
+                return showToast("Cover Image is required for Albums!");
+            }
+
+            // Save Logic
+            if (isSongInAlbumView) {
+                const album = getActiveAlbum();
+                if (state.editMode) {
+                    album.songs = album.songs.map(s => s.id === state.editId ? { ...s, title: state.tempItem.title, remarks: state.tempItem.remarks, link: state.tempItem.link } : s);
+                } else {
+                    album.songs.push({ id: generateId(), title: state.tempItem.title, score: 50, remarks: state.tempItem.remarks, link: state.tempItem.link });
+                }
+            } else {
+                if (state.editMode) {
+                    list.items = list.items.map(i => i.id === state.editId ? { ...i, ...state.tempItem } : i);
+                    // Sync Library
+                    if (state.originalItemForEdit) {
+                        const orig = state.originalItemForEdit;
+                        const curr = state.tempItem;
+                        if (orig.title !== curr.title || orig.artist !== curr.artist || orig.cover !== curr.cover) {
+                            updateLibraryEntry(orig.title, orig.artist, curr.title, curr.artist, curr.cover, curr.link);
+                        }
+                    }
+                } else {
+                    const newId = generateId();
+                    const colors = ['purple', 'blue', 'green', 'pink', 'orange'];
+                    const randColor = colors[Math.floor(Math.random() * colors.length)];
+                    const newItem = {
+                        id: newId,
+                        score: 50,
+                        color: `from-${randColor}-500 to-gray-700`,
+                        songs: [],
+                        ...state.tempItem
+                    };
+                    list.items.push(newItem);
+                    addToLibrary(newItem);
+                }
+            }
+            saveData();
+            closeModal();
+        }
+
+        function deleteItem(id) {
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                album.songs = album.songs.filter(s => s.id !== id);
+            } else {
+                const list = getActiveList();
+                list.items = list.items.filter(i => i.id !== id);
+            }
+            saveData();
+        }
+
+        function updateLibraryEntry(oldTitle, oldArtist, newTitle, newArtist, newCover, newLink) {
+            const entry = state.library.find(l => l.title.toLowerCase() === oldTitle.toLowerCase() && l.artist.toLowerCase() === oldArtist.toLowerCase());
+            if (entry) {
+                entry.title = newTitle; entry.artist = newArtist;
+                if (newCover) entry.cover = newCover;
+                if (newLink) entry.link = newLink;
+            } else {
+                addToLibrary({ title: newTitle, artist: newArtist, cover: newCover, link: newLink });
+            }
+        }
+
+        function addToLibrary(item) {
+            const exists = state.library.some(l => l.title.toLowerCase() === item.title.toLowerCase() && l.artist.toLowerCase() === item.artist.toLowerCase());
+            if (!exists) {
+                state.library.push({
+                    id: generateId(),
+                    title: item.title,
+                    artist: item.artist,
+                    cover: item.cover,
+                    link: item.link,
+                    defaultSongs: item.songs ? JSON.parse(JSON.stringify(item.songs)) : []
+                });
+            }
+        }
+
+        function handleArtistPicUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (!state.artists[state.activeArtistName]) state.artists[state.activeArtistName] = { userScore: 0 };
+                state.artists[state.activeArtistName].profilePic = reader.result;
+                saveData();
+                renderArtistProfile();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateArtistUserScore(val) {
+            if (!state.artists[state.activeArtistName]) state.artists[state.activeArtistName] = { userScore: 0 };
+            
+            const numVal = parseFloat(val);
+            state.artists[state.activeArtistName].userScore = numVal;
+            
+            const display = document.getElementById('user-score-display');
+            const slider = document.getElementById('artist-score-slider');
+            const input = document.getElementById('artist-score-input');
+            
+            if(display) display.innerText = numVal;
+            if(slider && document.activeElement !== slider) slider.value = numVal;
+            if(input && document.activeElement !== input) input.value = numVal;
+            
+            saveDataNoRender();
+        }
+
+        // --- Renderers ---
+        function render() {
+            renderHeader();
+            if (state.currentView === 'dashboard') renderDashboard();
+            else if (state.currentView === 'artistProfile') renderArtistProfile();
+            else if (state.currentView === 'globalArtistRankings') renderGlobalArtistRankings();
+            else if (state.currentView === 'comparison') renderComparison();
+            else renderMainArea();
+            lucide.createIcons({ root: document.body });
+        }
+
+        function renderHeader() {
+            const isDash = state.currentView === 'dashboard';
+            const isProfile = state.currentView === 'artistProfile';
+            const isGlobal = state.currentView === 'globalArtistRankings';
+            const isComparison = state.currentView === 'comparison';
+            
+            let title = 'Prog Rank';
+            let subtitle = '';
+            
+            if (!isDash) {
+                if (isProfile) { title = state.activeArtistName; subtitle = 'Artist Profile'; }
+                else if (isGlobal) { title = 'Global Rankings'; subtitle = 'All Artists'; }
+                else if (isComparison) { title = 'Comparison'; subtitle = state.activeArtistName; }
+                else if (state.currentView === 'list' || state.currentView === 'artistAutoList') {
+                    const list = getActiveList();
+                    title = list ? list.name : 'List';
+                    subtitle = list ? (list.isAuto ? 'Auto-Ranked' : (list.type === 'songs' ? 'Song Ranking' : 'Album Ranking')) : '';
+                } else if (state.currentView === 'album') {
+                    const alb = getActiveAlbum();
+                    title = alb ? alb.title : 'Album';
+                    subtitle = 'Song Ranking';
+                }
+            }
+
+            const backBtn = !isDash ? `<button onclick="goBack()" class="bg-neutral-800 p-2 rounded-lg hover:bg-neutral-700 transition-colors mr-2"><i data-lucide="arrow-left" class="w-5 h-5 text-white"></i></button>` : '';
+            const homeBtn = !isDash ? `<button onclick="goHome()" class="bg-neutral-800 p-2 rounded-lg hover:bg-neutral-700 transition-colors mr-4"><i data-lucide="home" class="w-5 h-5 text-white"></i></button>` : '';
+            
+            const zoomControls = (state.viewMode === 'horizontal' && !isDash && !isProfile && !isGlobal && !isComparison) ? `
+                <div class="flex bg-neutral-800 rounded-lg p-1 mr-2 hidden md:flex">
+                    <button onclick="zoomOut()" class="p-1.5 hover:text-white text-neutral-400"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                    <span class="px-2 text-xs flex items-center text-neutral-500 font-mono">${state.zoomLevel}x</span>
+                    <button onclick="zoomIn()" class="p-1.5 hover:text-white text-neutral-400"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                </div>` : '';
+
+            const searchBar = `
+                <div class="relative w-full max-w-md mx-4 hidden md:block">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500"></i>
+                    <input type="text" id="dashboard-search" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-full pl-10 pr-4 py-2 text-white placeholder-neutral-500 text-sm transition-all shadow-sm focus:shadow-md" placeholder="Search...">
+                </div>`;
+
+            const rightActions = isDash ? `
+                <button onclick="goToGlobalArtistRankings()" class="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white mr-2" title="All Artist Rankings"><i data-lucide="trophy" class="w-5 h-5"></i></button>
+                <button onclick="openListModal()" class="flex items-center gap-2 bg-white text-neutral-900 px-4 py-2 rounded-full text-sm font-bold hover:bg-neutral-200 transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New List</button>
+            ` : (isProfile || isGlobal || isComparison) ? '' : `
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMetrics()" class="hidden md:block px-3 py-1.5 rounded text-sm font-medium ${state.showMetrics ? 'bg-purple-600/20 text-purple-400' : 'text-neutral-400 hover:text-white'}">${state.showMetrics ? 'Metrics: ON' : 'Metrics'}</button>
+                    ${zoomControls}
+                    <div class="flex bg-neutral-800 rounded-lg p-1">
+                        <button onclick="setViewMode('horizontal')" class="p-1.5 rounded ${state.viewMode === 'horizontal' ? 'bg-neutral-700 text-white' : 'text-neutral-500'}"><i data-lucide="columns" class="w-4 h-4"></i></button>
+                        <button onclick="setViewMode('vertical')" class="p-1.5 rounded ${state.viewMode === 'vertical' ? 'bg-neutral-700 text-white' : 'text-neutral-500'}"><i data-lucide="layout-list" class="w-4 h-4"></i></button>
+                    </div>
+                    ${!state.isReadOnly ? `<button onclick="openModal()" class="flex items-center gap-2 bg-white text-neutral-900 px-3 py-2 rounded-full text-sm font-bold hover:bg-neutral-200 transition-colors ml-2"><i data-lucide="plus" class="w-4 h-4"></i> Add</button>` : ''}
+                </div>
+            `;
+
+            els.header.innerHTML = `
+                <div class="flex items-center gap-2">
+                    ${backBtn} ${homeBtn}
+                    <div class="flex flex-col overflow-hidden">
+                        <h1 class="text-xl font-bold tracking-tight text-white truncate">${title}</h1>
+                        ${subtitle ? `<span class="text-xs text-neutral-400 font-medium tracking-wider uppercase">${subtitle}</span>` : ''}
+                    </div>
+                </div>
+                ${searchBar}
+                <div class="flex items-center gap-2">${rightActions}</div>
+            `;
+
+            const sInput = document.getElementById('dashboard-search');
+            if(sInput) {
+                sInput.addEventListener('input', handleGlobalSearch);
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('#global-search-results') && !e.target.closest('#dashboard-search')) els.searchResults.classList.add('hidden');
+                });
+            }
+        }
+
+        function renderDashboard() {
+            els.mainContent.innerHTML = '';
+            const container = document.createElement('div');
+            container.className = 'p-4 md:p-8 max-w-6xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+            
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20';
+
+            const sortedLists = [...state.lists].sort((a, b) => (b.isPinned === a.isPinned) ? 0 : b.isPinned ? 1 : -1);
+
+            sortedLists.forEach((list, index) => {
+                const card = document.createElement('div');
+                card.draggable = true;
+                card.className = `${list.color || 'bg-neutral-800'} border ${list.isPinned ? 'border-purple-500 shadow-purple-500/20' : 'border-neutral-700/50'} rounded-2xl p-6 hover:border-white/50 transition-all cursor-pointer group relative overflow-hidden shadow-lg select-none`;
+                
+                card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed='move'; state.draggedListIdx = state.lists.indexOf(list); });
+                card.addEventListener('dragover', (e) => e.preventDefault());
+                card.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const dropIdx = state.lists.indexOf(list);
+                    if(state.draggedListIdx !== null && state.draggedListIdx !== dropIdx) {
+                        const item = state.lists[state.draggedListIdx];
+                        state.lists.splice(state.draggedListIdx, 1);
+                        state.lists.splice(dropIdx, 0, item);
+                        saveData();
+                    }
+                });
+
+                card.onclick = (e) => { if(!e.target.closest('.options-btn')) goToList(list.id); };
+
+                let visualHtml = '';
+                const covers = list.items.filter(i => i.cover).slice(0, 3);
+                if (covers.length > 0) {
+                     visualHtml = `<div class="flex -space-x-4 mb-4 overflow-hidden py-2 pl-2">
+                        ${covers.map(c => `<img src="${c.cover}" class="w-12 h-12 rounded-full border-2 border-neutral-800 object-cover relative z-10 shadow-md">`).join('')}
+                        ${list.items.length > 3 ? `<div class="w-12 h-12 rounded-full bg-neutral-900/50 border-2 border-neutral-800 flex items-center justify-center text-xs text-white z-0 relative backdrop-blur-sm">+${list.items.length - 3}</div>` : ''}
+                     </div>`;
+                } else {
+                    const icon = list.type === 'songs' ? 'music' : 'disc';
+                    visualHtml = `<div class="mb-4 py-2"><div class="w-12 h-12 rounded-full bg-neutral-900/30 flex items-center justify-center"><i data-lucide="${icon}" class="w-6 h-6 text-white/50"></i></div></div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                        ${list.isPinned ? '<i data-lucide="pin" class="w-4 h-4 text-purple-400 fill-current"></i>' : ''}
+                        <button class="options-btn p-2 hover:bg-black/20 rounded-full text-white" title="List Settings"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                    </div>
+                    ${visualHtml}
+                    <h3 class="text-xl font-bold text-white mb-1 truncate shadow-black drop-shadow-md">${list.name}</h3>
+                    <div class="flex items-center gap-2 text-sm text-white/60 font-medium">
+                         <span>${list.items.length} Items</span>
+                         <span class="w-1 h-1 rounded-full bg-white/40"></span>
+                         <span class="uppercase text-[10px] tracking-wider">${list.type || 'albums'}</span>
+                         ${list.isMain ? '<span class="ml-auto text-[10px] bg-purple-600 px-1.5 py-0.5 rounded text-white font-bold tracking-wide uppercase">MAIN</span>' : ''}
+                    </div>
+                `;
+                card.querySelector('.options-btn').onclick = (e) => openListOptions(e, list.id);
+                grid.appendChild(card);
+            });
+
+            const addCard = document.createElement('button');
+            addCard.onclick = openListModal;
+            addCard.className = 'border-2 border-dashed border-neutral-700 rounded-2xl p-6 flex flex-col items-center justify-center text-neutral-500 hover:text-white hover:border-neutral-500 transition-colors min-h-[200px] group';
+            addCard.innerHTML = `
+                <div class="bg-neutral-800 p-4 rounded-full mb-4 group-hover:bg-neutral-700 transition-colors shadow-lg">
+                    <i data-lucide="plus" class="w-8 h-8"></i>
+                </div>
+                <span class="font-bold">Create New List</span>
+            `;
+            grid.appendChild(addCard);
+
+            container.appendChild(grid);
+            els.mainContent.appendChild(container);
+        }
+
+        function renderArtistProfile() {
+            els.mainContent.innerHTML = '';
+            const artistName = state.activeArtistName;
+            const stats = getArtistStats(artistName);
+            const userScore = state.artists[artistName]?.userScore || 0;
+            const profilePic = getArtistProfilePic(artistName);
+            const safeName = artistName.replace(/'/g, "\\'");
+
+            const container = document.createElement('div');
+            container.className = 'p-8 max-w-5xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+
+            const itemLabel = state.mainListType === 'songs' ? 'Songs' : 'Albums';
+
+            container.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-8 mb-12 items-center md:items-start">
+                    <div class="relative group cursor-pointer w-48 h-48 rounded-full overflow-hidden border-4 border-neutral-800 shadow-2xl flex-shrink-0" onclick="document.getElementById('artist-pic-input').click()">
+                        ${profilePic ? `<img src="${profilePic}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-neutral-800 flex items-center justify-center"><i data-lucide="user" class="w-16 h-16 text-neutral-600"></i></div>`}
+                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="camera" class="w-8 h-8 text-white"></i></div>
+                    </div>
+                    <div class="flex-1 text-center md:text-left">
+                        <div class="flex justify-between items-start">
+                            <h1 class="text-4xl md:text-6xl font-black text-white mb-2 tracking-tight">${artistName}</h1>
+                            ${stats.count === 0 ? `<button onclick="deleteArtist('${safeName}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg" title="Delete Artist"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                        </div>
+                        <p class="text-neutral-400 text-lg mb-6">${stats.count} ${itemLabel} Ranked in Main List</p>
+                        
+                        <div class="flex flex-col md:flex-row gap-6">
+                            <div class="bg-neutral-800/50 p-4 rounded-xl border border-neutral-700/50">
+                                <div class="text-xs text-neutral-500 uppercase tracking-wider mb-1">Calculated Avg</div>
+                                <div class="text-3xl font-bold text-purple-400">${stats.avg}</div>
+                            </div>
+                            <div class="bg-neutral-800/50 p-4 rounded-xl border border-neutral-700/50 flex-1">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="text-xs text-neutral-500 uppercase tracking-wider">Your Rating</div>
+                                    <div class="text-xl font-bold text-white"><span id="user-score-display">${userScore}</span></div>
+                                </div>
+                                <div class="flex gap-4 items-center">
+                                    <input type="range" id="artist-score-slider" min="0" max="100" value="${userScore}" class="flex-1" oninput="updateArtistUserScore(this.value)">
+                                    <input type="number" id="artist-score-input" value="${userScore}" class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-white text-center" oninput="updateArtistUserScore(this.value)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    ${state.mainListType === 'albums' ? `
+                    <button onclick="goToArtistAutoList('albums')" class="p-6 bg-neutral-800 rounded-xl border border-neutral-700 hover:border-purple-500 transition-all text-left group">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-blue-900/30 p-2 rounded-lg"><i data-lucide="disc" class="w-6 h-6 text-blue-400"></i></div>
+                            <i data-lucide="arrow-right" class="w-5 h-5 text-neutral-600 group-hover:text-white transition-colors"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Main List Ranking (Albums)</h3>
+                        <p class="text-sm text-neutral-400">View auto-generated ranking based on your Main List.</p>
+                    </button>` : ''}
+                    <button onclick="goToArtistAutoList('songs')" class="p-6 bg-neutral-800 rounded-xl border border-neutral-700 hover:border-purple-500 transition-all text-left group col-span-2 md:col-span-1">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-green-900/30 p-2 rounded-lg"><i data-lucide="music" class="w-6 h-6 text-green-400"></i></div>
+                            <i data-lucide="arrow-right" class="w-5 h-5 text-neutral-600 group-hover:text-white transition-colors"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Main List Ranking (Songs)</h3>
+                        <p class="text-sm text-neutral-400">View all songs ranked by score.</p>
+                    </button>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="openDiscographyList()" class="flex-1 py-3 rounded-lg border border-neutral-600 hover:bg-neutral-800 transition-colors font-bold text-neutral-300">Open Discography List</button>
+                    <button onclick="goToComparison()" class="flex-1 py-3 rounded-lg bg-white text-black hover:bg-neutral-200 transition-colors font-bold">Compare Rankings</button>
+                </div>
+            `;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderGlobalArtistRankings() {
+            els.mainContent.innerHTML = '';
+            
+            // Get unique artists from library/main list
+            const allArtists = [...new Set(state.library.map(l => l.artist))];
+            
+            let rankings = allArtists.map(name => {
+                const stats = getArtistStats(name);
+                return { name, ...stats, userScore: state.artists[name]?.userScore || 0 };
+            });
+
+            // If Song Mode, filter out artists with < 4 songs
+            if (state.mainListType === 'songs') {
+                rankings = rankings.filter(r => r.count >= 4);
+            }
+
+            // Calibrate Logic
+            const maxAvg = Math.max(...rankings.map(r => parseFloat(r.avg)), 1); // Avoid div by zero
+
+            // Sorting logic
+            if (state.globalSort === 'user') {
+                rankings.sort((a,b) => b.userScore - a.userScore);
+            } else {
+                rankings.sort((a,b) => b.avg - a.avg);
+            }
+
+            const container = document.createElement('div');
+            container.className = 'p-8 max-w-4xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+            
+            const calibratedText = state.calibrateGlobal ? `<span class="text-xs font-normal text-purple-400 ml-2">(Scaled 0-100)</span>` : '';
+
+            let html = `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold flex items-center">Global Artist Rankings ${calibratedText}</h2>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer bg-neutral-800 px-3 py-1.5 rounded-lg hover:bg-neutral-700 transition-colors">
+                             <span class="text-xs font-bold text-white">Calibrate to 100</span>
+                             <div class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${state.calibrateGlobal ? 'checked' : ''} onchange="toggleCalibration()">
+                                <div class="w-9 h-5 bg-neutral-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                            </div>
+                        </label>
+                        <div class="flex bg-neutral-800 rounded-lg p-1">
+                            <button onclick="setGlobalSort('avg')" class="px-3 py-1 text-xs font-bold rounded ${state.globalSort === 'avg' ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:text-white'}">Avg Score</button>
+                            <button onclick="setGlobalSort('user')" class="px-3 py-1 text-xs font-bold rounded ${state.globalSort === 'user' ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:text-white'}">User Rating</button>
+                        </div>
+                    </div>
+                </div>
+                ${rankings.length === 0 && state.mainListType === 'songs' ? '<div class="text-center text-neutral-500 py-10">Add at least 4 songs for an artist to see them here.</div>' : ''}
+                <div class="space-y-4">
+            `;
+            rankings.forEach((r, i) => {
+                const pic = getArtistProfilePic(r.name);
+                const safeName = r.name.replace(/'/g, "\\'");
+                
+                let displayAvg = r.avg;
+                if (state.calibrateGlobal) {
+                    displayAvg = ((r.avg / maxAvg) * 100).toFixed(1);
+                }
+
+                html += `
+                    <div class="flex items-center gap-4 p-4 bg-neutral-800/50 rounded-xl border border-neutral-800">
+                        <div class="text-2xl font-black text-neutral-600 w-8 text-center">#${i+1}</div>
+                        <img src="${pic || ''}" class="w-12 h-12 rounded-full object-cover bg-neutral-700">
+                        <div class="flex-1 cursor-pointer" onclick="goToArtistProfile('${safeName}')">
+                            <h3 class="text-lg font-bold text-white hover:text-purple-400 transition-colors">${r.name}</h3>
+                            <div class="text-xs text-neutral-500">${r.count} ${state.mainListType === 'songs' ? 'Songs' : 'Albums'}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xl font-bold text-purple-400">${displayAvg}</div>
+                            <div class="text-xs text-neutral-500">Avg Score</div>
+                        </div>
+                        <div class="w-px h-8 bg-neutral-700 mx-2"></div>
+                        <div class="text-right w-16">
+                            <div class="text-lg font-bold text-white">${r.userScore > 0 ? r.userScore : '-'}</div>
+                            <div class="text-xs text-neutral-500">User</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderComparison() {
+            els.mainContent.innerHTML = '';
+            const artistName = state.activeArtistName;
+            const mainList = state.lists.find(l => l.isMain);
+            const discogList = state.lists.find(l => l.name === `Discography: ${artistName}`);
+            
+            const mainItems = mainList ? mainList.items.filter(i => i.artist.toLowerCase() === artistName.toLowerCase()) : [];
+            const userItems = discogList ? discogList.items : [];
+
+            // Combine titles
+            const allTitles = [...new Set([...mainItems.map(a=>a.title), ...userItems.map(a=>a.title)])];
+            
+            // Auto-Calibration Logic (Normalize to 0-10)
+            const allScores = [...mainItems.map(i=>i.score), ...userItems.map(i=>i.score)];
+            const maxScore = Math.max(...allScores, 100); // Baseline 100 or actual max
+            const minScore = Math.min(0, ...allScores);
+            const range = maxScore - minScore || 1;
+
+            const calibrate = (score) => {
+                const norm = (score - minScore) / range; // 0 to 1
+                return (norm * 10).toFixed(1);
+            };
+
+            const container = document.createElement('div');
+            container.className = 'flex flex-col h-full';
+            
+            let html = `
+                <div class="p-4 border-b border-neutral-800 bg-neutral-900 z-10 flex flex-col md:flex-row justify-between items-center gap-2">
+                    <h2 class="text-xl font-bold">Comparison: ${artistName}</h2>
+                    <div class="text-xs text-purple-400 italic">Auto-Calibrated to 0-10 Scale</div>
+                    <div class="flex gap-8 text-sm uppercase tracking-widest font-bold text-neutral-500">
+                        <span>Main List</span>
+                        <span>Discography List</span>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                    <div class="space-y-2 max-w-4xl mx-auto">
+            `;
+
+            allTitles.forEach(title => {
+                const mainItem = mainItems.find(a => a.title === title);
+                const userItem = userItems.find(a => a.title === title);
+                
+                const mainScore = mainItem ? calibrate(mainItem.score) : 'N/A';
+                const userScore = userItem ? calibrate(userItem.score) : 'N/A';
+                const cover = mainItem?.cover || userItem?.cover;
+
+                html += `
+                    <div class="flex items-center bg-neutral-800/40 rounded-lg p-2 border border-neutral-800 hover:border-neutral-600 transition-colors">
+                        <div class="flex-1 text-right pr-4 font-mono font-bold text-blue-400 text-lg">${mainScore}</div>
+                        <div class="w-px h-8 bg-neutral-700"></div>
+                        <div class="flex-initial w-64 px-4 flex items-center gap-3">
+                            <img src="${cover || ''}" class="w-10 h-10 rounded object-cover bg-neutral-700">
+                            <div class="text-sm font-bold text-white truncate">${title}</div>
+                        </div>
+                        <div class="w-px h-8 bg-neutral-700"></div>
+                        <div class="flex-1 text-left pl-4 font-mono font-bold text-purple-400 text-lg">${userScore}</div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+            container.innerHTML = html;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderMainArea() {
+            els.mainContent.innerHTML = '';
+            if (state.viewMode === 'horizontal') renderHorizontalView();
+            else renderVerticalView();
+        }
+
+        function renderHorizontalView() {
+            const items = getCurrentItems();
+            const currentAlbum = getActiveAlbum();
+            const activeList = getActiveList();
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'absolute inset-0 flex flex-col overflow-hidden';
+            
+            const guide = document.createElement('div');
+            guide.className = 'w-full text-center py-4 text-neutral-600 text-sm uppercase tracking-widest font-medium pointer-events-none select-none z-10 bg-neutral-900/50 backdrop-blur-sm shrink-0';
+            guide.innerHTML = 'Left: Worst &larr; &nbsp; &rarr; Right: Best';
+            wrapper.appendChild(guide);
+
+            const scrollArea = document.createElement('div');
+            scrollArea.className = 'flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar relative flex flex-col justify-center';
+            
+            const axisContainer = document.createElement('div');
+            axisContainer.id = 'axis-container';
+            const widthPercent = Math.max(95, state.zoomLevel * 95);
+            axisContainer.style.width = `${widthPercent}%`;
+            axisContainer.style.minWidth = '95%'; 
+            axisContainer.className = 'h-64 relative flex items-center group select-none transition-all duration-300 mx-auto';
+            
+            const line = document.createElement('div');
+            line.className = 'absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-neutral-700 to-transparent w-full';
+            axisContainer.appendChild(line);
+
+            if (items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'absolute inset-0 flex items-center justify-center text-neutral-600';
+                empty.innerText = 'List is empty.';
+                axisContainer.appendChild(empty);
+            }
+
+            const { min, range } = getStats();
+            const dynSize = getDynamicSize();
+
+            items.forEach(item => {
+                const percent = ((item.score - min) / range) * 100;
+                
+                const node = document.createElement('div');
+                node.id = `node-${item.id}`;
+                node.className = `absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-75 ease-out hover:scale-110 hover:z-40 z-10`;
+                node.style.left = `${percent}%`;
+                node.style.cursor = state.isReadOnly ? 'pointer' : 'grab';
+
+                const isSong = state.currentView === 'album' || state.activeListId === 'auto-songs' || (activeList && activeList.type === 'songs');
+                const coverUrl = item.cover || (currentAlbum ? currentAlbum.cover : '');
+
+                // Drag/Click Logic
+                if (!state.isReadOnly) {
+                    node.addEventListener('mousedown', (e) => handleDragStart(e, item.id));
+                    node.addEventListener('touchstart', (e) => handleDragStart(e, item.id));
+                }
+                
+                // Click to view/edit
+                node.addEventListener('click', (e) => {
+                     // If it's a song, just open details modal
+                     if (isSong) {
+                         openModal(item);
+                     } else {
+                         // It's an album
+                         if (state.currentView === 'artistAutoList' && state.activeListId === 'auto-albums') {
+                             const mainList = state.lists.find(l => l.isMain);
+                             if (mainList) goToAlbum(item.id, mainList.id);
+                         } else {
+                             // Regular List View
+                             if(!state.isDragging) goToAlbum(item.id);
+                         }
+                     }
+                });
+
+                let visual;
+                if (isSong) {
+                    visual = `<div style="width: ${dynSize * 0.8}px; height: ${dynSize * 0.8}px;" class="rounded-full shadow-2xl overflow-hidden border-2 border-neutral-500 group-hover/album:border-white bg-neutral-800 transition-colors relative flex items-center justify-center">
+                        ${coverUrl ? `<img src="${coverUrl}" class="w-full h-full object-cover pointer-events-none opacity-70 group-hover/album:opacity-100">` : `<div class="w-full h-full bg-neutral-700 flex items-center justify-center"><i data-lucide="music-2" class="w-1/2 h-1/2 text-white/50"></i></div>`}
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="w-2 h-2 bg-white rounded-full shadow-sm"></div></div>
+                    </div>`;
+                } else {
+                    visual = `<div style="width: ${dynSize}px; height: ${dynSize}px;" class="rounded-full shadow-2xl overflow-hidden border-2 border-neutral-700 group-hover/album:border-white bg-neutral-800 transition-colors relative">
+                        ${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover pointer-events-none">` : `<div class="w-full h-full bg-gradient-to-br ${item.color || 'from-gray-700 to-gray-900'} flex items-center justify-center"><i data-lucide="disc" class="w-1/2 h-1/2 text-white/20"></i></div>`}
+                    </div>`;
+                }
+
+                const tooltipContent = `
+                    <h3 class="font-bold text-white truncate">${item.title || 'Untitled'}</h3>
+                    ${!isSong ? `<p class="text-xs text-neutral-400 mb-2 truncate">${item.artist || 'Unknown Artist'}</p>` : ''}
+                    ${item.remarks ? `<div class="mt-2 p-2 bg-black/50 rounded text-[10px] text-left text-neutral-300 italic line-clamp-3">"${item.remarks}"</div>` : ''}
+                    <div class="flex justify-center gap-2 mt-2">
+                        <button class="btn-edit-item p-1.5 hover:bg-white/10 rounded-full text-neutral-400 hover:text-white" title="Details"><i data-lucide="${state.isReadOnly ? 'eye' : 'more-vertical'}" class="w-3 h-3"></i></button>
+                    </div>
+                `;
+
+                node.innerHTML = `
+                    <div class="relative group/album">
+                        ${visual}
+                        ${state.showMetrics ? `<div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-neutral-800 text-purple-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-neutral-700 shadow-xl whitespace-nowrap"><span class="metric-val">${getMetric(item.score)}</span></div>` : ''}
+                        <div class="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-48 bg-neutral-900/90 backdrop-blur-md border border-neutral-700 p-3 rounded-xl shadow-2xl opacity-0 invisible group-hover/album:opacity-100 group-hover/album:visible transition-all duration-200 transform translate-y-2 group-hover/album:translate-y-0 text-center z-50">${tooltipContent}</div>
+                    </div>
+                    <div class="w-px h-6 bg-neutral-700/50 absolute left-1/2 -translate-x-1/2 -top-3 -z-10 group-hover/album:bg-purple-500/50 transition-colors"></div>
+                `;
+
+                node.querySelector('.btn-edit-item').addEventListener('mousedown', e => e.stopPropagation());
+                node.querySelector('.btn-edit-item').addEventListener('click', (e) => { e.stopPropagation(); openModal(item); });
+
+                axisContainer.appendChild(node);
+            });
+
+            scrollArea.appendChild(axisContainer);
+            wrapper.appendChild(scrollArea);
+            els.mainContent.appendChild(wrapper);
+        }
+
+        function renderVerticalView() {
+            const list = getCurrentItems();
+            const activeList = getActiveList();
+            const container = document.createElement('div');
+            container.className = 'h-full overflow-y-auto custom-scrollbar p-4 md:p-8 max-w-4xl mx-auto space-y-4';
+            const sorted = [...list].sort((a, b) => b.score - a.score);
+
+            if (sorted.length === 0) container.innerHTML = `<div class="text-center text-neutral-500 mt-20">List is empty.</div>`;
+
+            sorted.forEach((item, index) => {
+                const row = document.createElement('div');
+                const isClickable = (state.currentView === 'list' || state.currentView === 'artistAutoList');
+                row.className = `group flex items-center gap-4 md:gap-6 bg-neutral-800/40 hover:bg-neutral-800/80 p-4 rounded-2xl border border-neutral-800 hover:border-neutral-600 transition-all ${isClickable ? 'cursor-pointer' : ''}`;
+                
+                // Logic to identify if item is a Song (no children) or Album
+                const isSong = state.currentView === 'album' || state.activeListId === 'auto-songs' || (activeList && activeList.type === 'songs');
+
+                if (isClickable) {
+                    row.onclick = (e) => {
+                        if (e.target.closest('button') || e.target.closest('a')) return;
+                        if (isSong) {
+                             openModal(item); // Song just opens details
+                        } else {
+                             // Albums open sub-list
+                             if (state.currentView === 'artistAutoList' && state.activeListId === 'auto-albums') {
+                                 const mainList = state.lists.find(l => l.isMain);
+                                 if(mainList) goToAlbum(item.id, mainList.id);
+                             } else {
+                                goToAlbum(item.id);
+                             }
+                        }
+                    };
+                }
+
+                const imgHtml = isSong ? 
+                    `<div class="w-12 h-12 rounded-lg bg-neutral-900 flex items-center justify-center flex-shrink-0 text-neutral-500 overflow-hidden">${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover">` : `<i data-lucide="music-2" class="w-5 h-5"></i>`}</div>` : 
+                    `<div class="w-16 h-16 md:w-24 md:h-24 rounded-xl overflow-hidden bg-neutral-900 shadow-lg flex-shrink-0">${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-gradient-to-br ${item.color || 'from-gray-700 to-gray-900'} flex items-center justify-center"><i data-lucide="disc" class="w-8 h-8 text-white/20"></i></div>`}</div>`;
+
+                row.innerHTML = `
+                    <div class="text-xl md:text-2xl font-black text-neutral-700 w-8 text-center group-hover:text-neutral-500">#${index + 1}</div>
+                    ${imgHtml}
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-1">
+                            <h3 class="text-lg md:text-2xl font-bold text-white truncate">${item.title}</h3>
+                            ${state.showMetrics ? `<span class="text-xs font-bold bg-neutral-900 text-purple-400 px-2 py-0.5 rounded border border-neutral-700">${getMetric(item.score)}/10</span>` : ''}
+                        </div>
+                        ${!isSong ? `<p class="text-base text-neutral-400 mb-2">${item.artist}</p>` : ''}
+                        ${item.remarks ? `<p class="text-sm text-neutral-500 italic line-clamp-1">"${item.remarks}"</p>` : ''}
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <button class="btn-list-edit p-2 hover:bg-white/10 rounded-lg text-neutral-400 hover:text-white transition-colors"><i data-lucide="${state.isReadOnly ? 'eye' : 'more-vertical'}" class="w-5 h-5"></i></button>
+                        ${!state.isReadOnly ? `<button class="btn-list-delete p-2 hover:bg-red-500/10 rounded-lg text-neutral-400 hover:text-red-500 transition-colors"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                    </div>
+                `;
+                row.querySelector('.btn-list-edit').addEventListener('click', (e) => { e.stopPropagation(); openModal(item); });
+                if(!state.isReadOnly) row.querySelector('.btn-list-delete').addEventListener('click', (e) => { e.stopPropagation(); deleteItem(item.id); });
+                container.appendChild(row);
+            });
+            els.mainContent.appendChild(container);
+        }
+
+        // --- List Options ---
+        function openListOptions(e, listId) {
+            e.stopPropagation();
+            state.optionsListId = listId;
+            state.listOptionsOpen = true;
+            state.deleteConfirmState = false; 
+            
+            const list = state.lists.find(l => l.id === listId);
+            els.inputRenameList.value = list.name;
+            
+            els.btnPinList.innerHTML = `<i data-lucide="pin" class="w-4 h-4"></i> ${list.isPinned ? 'Unpin List' : 'Pin to Top'}`;
+            els.btnPinList.className = `w-full flex items-center justify-center gap-2 ${list.isPinned ? 'bg-purple-600 hover:bg-purple-500' : 'bg-neutral-800 hover:bg-neutral-700'} text-white py-2.5 rounded-lg font-bold transition-colors`;
+            els.btnPinList.onclick = () => togglePinList();
+
+            if(list.isMain) {
+                els.btnDeleteList.classList.add('hidden');
+            } else {
+                els.btnDeleteList.classList.remove('hidden');
+                els.btnDeleteList.innerHTML = `<i data-lucide="trash-2" class="w-4 h-4"></i> Delete List`;
+                els.btnDeleteList.className = "w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors";
+            }
+            
+            els.listOptionsOverlay.classList.remove('hidden');
+            setTimeout(() => els.listOptionsOverlay.classList.remove('opacity-0'), 10);
+            lucide.createIcons({ root: els.listOptionsOverlay });
+        }
+
+        function togglePinList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) {
+                list.isPinned = !list.isPinned;
+                saveData();
+                closeOptionsModal();
+            }
+        }
+
+        function closeOptionsModal() {
+            state.listOptionsOpen = false;
+            state.optionsListId = null;
+            els.listOptionsOverlay.classList.add('opacity-0');
+            setTimeout(() => els.listOptionsOverlay.classList.add('hidden'), 200);
+        }
+
+        function renameList(newName) {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) { list.name = newName; renderDashboard(); lucide.createIcons({ root: els.mainContent }); }
+        }
+
+        function updateListColor(colorClass) {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) { list.color = colorClass; renderDashboard(); lucide.createIcons({ root: els.mainContent }); }
+        }
+
+        function deleteList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list.isMain) return showToast("Cannot delete the Main List.");
+
+            if (!state.deleteConfirmState) {
+                state.deleteConfirmState = true;
+                els.btnDeleteList.innerText = "Confirm Delete?";
+                els.btnDeleteList.className = "w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-bold transition-colors";
+                return;
+            }
+            state.lists = state.lists.filter(l => l.id !== state.optionsListId);
+            saveData();
+            closeOptionsModal();
+            showToast("List deleted.");
+        }
+
+        function shareList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(!list) return;
+            const cleanItems = list.items.map(item => {
+                const copy = { ...item };
+                if (copy.cover && copy.cover.startsWith('data:')) copy.cover = null; 
+                return copy;
+            });
+            const exportData = { name: list.name, color: list.color, items: cleanItems, type: list.type };
+            navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => showToast("List data copied!"));
+        }
+
+        // --- Drag Logic ---
+        function handleDragStart(e, id) {
+            if (state.viewMode !== 'horizontal' || state.isReadOnly) return;
+            state.isDragging = true;
+            state.draggedId = id;
+            state.isClickCandidate = true;
+            state.dragStartX = e.touches ? e.touches[0].clientX : e.clientX;
+        }
+
+        function handleDragMove(e) {
+            if (!state.isDragging || !state.draggedId) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            if (state.isClickCandidate && Math.abs(clientX - state.dragStartX) > 5) state.isClickCandidate = false;
+
+            const container = document.getElementById('axis-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const percentage = (clientX - rect.left) / rect.width;
+            const { min, range } = getStats();
+            
+            let newScore;
+            if (percentage < 0) newScore = min + (percentage * range * 3);
+            else if (percentage > 1) newScore = min + range + ((percentage - 1) * range * 3);
+            else newScore = min + (percentage * range);
+
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                album.songs = album.songs.map(s => s.id === state.draggedId ? { ...s, score: newScore } : s);
+            } else if (state.currentView === 'list') {
+                const list = getActiveList();
+                list.items = list.items.map(i => i.id === state.draggedId ? { ...i, score: newScore } : i);
+            }
+
+            // Live Update DOM
+            const newStats = getStats();
+            const listItems = getCurrentItems();
+            listItems.forEach(item => {
+                const node = document.getElementById(`node-${item.id}`);
+                if (node) {
+                    const percent = ((item.score - newStats.min) / newStats.range) * 100;
+                    node.style.left = `${percent}%`;
+                    if (state.showMetrics) {
+                        const m = node.querySelector('.metric-val');
+                        if(m) m.innerText = getMetric(item.score);
+                    }
+                }
+            });
+        }
+
+        function handleDragEnd() {
+            if (state.isDragging) {
+                if (state.isClickCandidate) {
+                    const list = getActiveList();
+                    const isSong = state.currentView === 'album' || (list && list.type === 'songs');
+
+                    if (isSong) {
+                         const s = getCurrentItems().find(x => x.id === state.draggedId);
+                         openModal(s);
+                    } else if (state.currentView === 'list') {
+                         goToAlbum(state.draggedId);
+                    }
+                } else {
+                    saveData();
+                    render();
+                }
+                state.isDragging = false;
+                state.draggedId = null;
+            }
+        }
+
+        // --- Library Search & Misc ---
+        function renderLibraryResults(results) {
+            els.libraryResults.innerHTML = '';
+            els.libraryResults.classList.remove('hidden');
+            if (results.length === 0) return els.libraryResults.innerHTML = '<div class="text-xs text-neutral-500 p-2 text-center">No matches found.</div>';
+            results.forEach(libItem => {
+                const el = document.createElement('div');
+                el.className = 'flex items-center gap-3 p-2 rounded hover:bg-neutral-800 cursor-pointer';
+                el.innerHTML = `
+                    <img src="${libItem.cover || ''}" class="w-8 h-8 rounded object-cover bg-neutral-700">
+                    <div class="flex-1 min-w-0"><div class="text-sm font-bold text-white truncate">${libItem.title}</div><div class="text-xs text-neutral-500 truncate">${libItem.artist}</div></div>
+                    <i data-lucide="plus" class="w-4 h-4 text-purple-500"></i>
+                `;
+                el.onclick = () => {
+                    state.tempItem = { ...libItem, remarks: '' };
+                    state.editMode = false;
+                    els.inputCoverUrl.value = (libItem.cover && !libItem.cover.startsWith('data:')) ? libItem.cover : '';
+                    updateModalUI();
+                    els.libraryResults.classList.add('hidden');
+                };
+                els.libraryResults.appendChild(el);
+            });
+            lucide.createIcons({ root: els.libraryResults });
+        }
+
+        function handleArtistInput(e) {
+            const query = e.target.value.toLowerCase();
+            state.tempItem.artist = e.target.value;
+            if (query.length < 1) return els.artistSuggestions.classList.add('hidden');
+            const artists = [...new Set(state.library.map(l => l.artist))];
+            const matches = artists.filter(a => a.toLowerCase().includes(query));
+            if (matches.length > 0) {
+                els.artistSuggestions.innerHTML = '';
+                matches.forEach(artist => {
+                    const div = document.createElement('div');
+                    div.className = 'px-4 py-2 hover:bg-neutral-700 cursor-pointer text-sm text-white';
+                    div.innerText = artist;
+                    div.onclick = () => {
+                        state.tempItem.artist = artist;
+                        els.inputArtist.value = artist;
+                        els.artistSuggestions.classList.add('hidden');
+                    };
+                    els.artistSuggestions.appendChild(div);
+                });
+                els.artistSuggestions.classList.remove('hidden');
+            } else els.artistSuggestions.classList.add('hidden');
+        }
+
+        function handleGlobalSearch(e) {
+            const query = e.target.value.toLowerCase();
+            if (query.length < 1) return els.searchResults.classList.add('hidden');
+            els.searchResults.innerHTML = '';
+            els.searchResults.classList.remove('hidden');
+
+            const lists = state.lists.filter(l => l.name.toLowerCase().includes(query));
+            const artists = [...new Set(state.library.filter(l => l.artist.toLowerCase().includes(query)).map(l => l.artist))];
+            
+            // Render Artists
+            if(artists.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Artists</div>`;
+                artists.forEach(a => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    el.innerHTML = `<div class="w-8 h-8 rounded-full bg-purple-900/50 flex items-center justify-center"><i data-lucide="mic-2" class="w-4 h-4 text-purple-400"></i></div><span class="font-bold text-white">${a}</span>`;
+                    const safeName = a.replace(/'/g, "\\'");
+                    el.onclick = () => goToArtistProfile(safeName);
+                    els.searchResults.appendChild(el);
+                });
+            }
+            // Render Lists
+            if(lists.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Lists</div>`;
+                lists.forEach(l => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    el.innerHTML = `<div class="w-8 h-8 rounded-full ${l.color} flex items-center justify-center"><i data-lucide="list" class="w-4 h-4 text-white"></i></div><span class="font-bold text-white">${l.name}</span>`;
+                    el.onclick = () => { goToList(l.id); els.searchResults.classList.add('hidden'); };
+                    els.searchResults.appendChild(el);
+                });
+            }
+
+            // Render Items (Albums/Songs)
+            const matchedItems = [];
+            const seenItems = new Set();
+            
+            state.lists.forEach(list => {
+                list.items.forEach(item => {
+                    const key = `${item.title.toLowerCase()}|${item.artist.toLowerCase()}`;
+                    if (item.title.toLowerCase().includes(query) && !seenItems.has(key)) {
+                        seenItems.add(key);
+                        matchedItems.push({ item, listName: list.name, listId: list.id, type: list.type });
+                    }
+                });
+            });
+
+            if (matchedItems.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Items</div>`;
+                matchedItems.forEach(match => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    const icon = match.type === 'songs' ? 'music' : 'disc';
+                    el.innerHTML = `
+                        <img src="${match.item.cover || ''}" class="w-8 h-8 rounded object-cover bg-neutral-700">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-white text-sm">${match.item.title}</div>
+                            <div class="text-xs text-neutral-500">in ${match.listName}</div>
+                        </div>
+                    `;
+                    el.onclick = () => { 
+                        if (match.type === 'songs') {
+                            // If it's a song in a list, we might want to go to the list
+                            goToList(match.listId);
+                        } else {
+                            goToAlbum(match.item.id, match.listId); 
+                        }
+                        els.searchResults.classList.add('hidden'); 
+                    };
+                    els.searchResults.appendChild(el);
+                });
+            }
+
+            lucide.createIcons({ root: els.searchResults });
+        }
+
+        // Global exposing
+        window.goHome = goHome;
+        window.goBack = goBack;
+        window.toggleMetrics = toggleMetrics;
+        window.toggleCalibration = toggleCalibration;
+        window.setViewMode = setViewMode;
+        window.openModal = openModal;
+        window.openListModal = openListModal;
+        window.zoomIn = zoomIn;
+        window.zoomOut = zoomOut;
+        window.goToArtistProfile = goToArtistProfile;
+        window.goToArtistAutoList = goToArtistAutoList;
+        window.goToComparison = goToComparison;
+        window.goToGlobalArtistRankings = goToGlobalArtistRankings;
+        window.handleArtistPicUpload = handleArtistPicUpload;
+        window.updateArtistUserScore = updateArtistUserScore;
+        window.setGlobalSort = setGlobalSort;
+        window.deleteArtist = deleteArtist;
+        window.openDiscographyList = openDiscographyList;
+        window.selectMainListType = selectMainListType;
+
+        // Init
+        setupEventListeners(); 
+        
+        function setupEventListeners() {
+            // Modals
+            els.btnCloseModal.addEventListener('click', closeModal);
+            els.modalOverlay.addEventListener('click', (e) => { if(e.target===els.modalOverlay) closeModal(); });
+            els.btnCloseListModal.addEventListener('click', () => { els.listModalOverlay.classList.add('hidden'); });
+            els.btnCloseOptionsModal.addEventListener('click', closeOptionsModal);
+            
+            // CRUD
+            els.coverTrigger.addEventListener('click', () => els.fileInput.click());
+            els.fileInput.addEventListener('change', handleImageUpload);
+            els.inputCoverUrl.addEventListener('input', (e) => { state.tempItem.cover = e.target.value; updateModalUI(); });
+            els.btnSave.addEventListener('click', saveItem);
+            els.btnDelete.addEventListener('click', () => { if(state.editId) deleteItem(state.editId); closeModal(); });
+            
+            // Inputs
+            ['inputTitle', 'inputLink', 'inputRemarks'].forEach(k => {
+                els[k].addEventListener('input', (e) => {
+                    const f = k.replace('input', '').toLowerCase();
+                    state.tempItem[f] = e.target.value;
+                });
+            });
+            els.inputArtist.addEventListener('input', handleArtistInput);
+            document.addEventListener('click', (e) => { if(!e.target.closest('#field-artist-container')) els.artistSuggestions.classList.add('hidden'); });
+            
+            // Search Library
+            els.inputSearchLib.addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase();
+                if(q.length < 2) return els.libraryResults.classList.add('hidden');
+                const results = state.library.filter(i => i.title.toLowerCase().includes(q) || i.artist.toLowerCase().includes(q));
+                renderLibraryResults(results);
+            });
+
+            // List Ops
+            els.btnCreateList.addEventListener('click', createNewList);
+            els.btnImportList.addEventListener('click', importList);
+            
+            // Options
+            els.btnDeleteList.addEventListener('click', deleteList);
+            els.btnShareList.addEventListener('click', shareList);
+            els.inputRenameList.addEventListener('input', (e) => renameList(e.target.value));
+
+            // Tabs
+            els.tabCreate.addEventListener('click', () => setListModalTab('create'));
+            els.tabImport.addEventListener('click', () => setListModalTab('import'));
+
+            // Drag
+            window.addEventListener('mousemove', handleDragMove);
+            window.addEventListener('mouseup', handleDragEnd);
+            window.addEventListener('touchmove', handleDragMove, {passive:false});
+            window.addEventListener('touchend', handleDragEnd);
+            
+            els.artistPicInput.addEventListener('change', handleArtistPicUpload);
+        }
+
+        init(); 
+
+    </script>
+</body>
+</html>
