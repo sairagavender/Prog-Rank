@@ -724,6 +724,7 @@
     <div class="client-id-row">
       <input class="input-field" type="text" id="client-id-input" placeholder="Paste your Client ID here…" />
       <button class="btn" onclick="startAuth()">Connect →</button>
+
     </div>
     <div id="setup-error"></div>
   </div>
@@ -746,12 +747,26 @@ document.getElementById('redirect-uri-display').textContent = REDIRECT_URI;
 
 let accessToken = null;
 
+// ─── PKCE Helpers ─────────────────────────────────────────────────────────────
+function generateRandomString(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const arr = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(arr).map(b => chars[b % chars.length]).join('');
+}
+
+async function generateCodeChallenge(verifier) {
+  const enc = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', enc);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 function getClientId() {
   return localStorage.getItem('spotify_client_id') || '';
 }
 
-function startAuth() {
+async function startAuth() {
   const clientId = document.getElementById('client-id-input').value.trim();
   if (!clientId || clientId.length < 20) {
     showSetupError('Please enter a valid Client ID.');
@@ -759,29 +774,45 @@ function startAuth() {
   }
   localStorage.setItem('spotify_client_id', clientId);
 
+  const verifier = generateRandomString(64);
+  const challenge = await generateCodeChallenge(verifier);
+  localStorage.setItem('pkce_verifier', verifier);
+
   const scopes = 'user-read-private user-read-email';
   const params = new URLSearchParams({
     client_id: clientId,
-    response_type: 'token',
+    response_type: 'code',
     redirect_uri: REDIRECT_URI,
     scope: scopes,
-    show_dialog: 'true'
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
   });
   window.location.href = `https://accounts.spotify.com/authorize?${params}`;
 }
 
-function parseHash() {
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  return {
-    token: params.get('access_token'),
-    expires: params.get('expires_in')
-  };
+async function exchangeCodeForToken(code) {
+  const clientId = getClientId();
+  const verifier = localStorage.getItem('pkce_verifier');
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: REDIRECT_URI,
+    client_id: clientId,
+    code_verifier: verifier,
+  });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) throw new Error('Token exchange failed: ' + await res.text());
+  return res.json();
 }
 
 function logout() {
   localStorage.removeItem('spotify_access_token');
   localStorage.removeItem('spotify_token_expiry');
+  localStorage.removeItem('pkce_verifier');
   accessToken = null;
   showSetupScreen();
 }
@@ -1077,21 +1108,36 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
-(function init() {
-  // Check for token in URL hash (after OAuth redirect)
-  const { token, expires } = parseHash();
-  if (token) {
-    accessToken = token;
-    localStorage.setItem('spotify_access_token', token);
-    const expiry = Date.now() + parseInt(expires || 3600) * 1000;
-    localStorage.setItem('spotify_token_expiry', expiry);
-    // Clean URL
+async function init() {
+  // Check for PKCE auth code in URL query params (after OAuth redirect)
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  const error = urlParams.get('error');
+
+  if (error) {
     history.replaceState(null, '', window.location.pathname);
-    showAppScreen();
+    showSetupScreen();
+    showSetupError('Spotify authorization was denied.');
     return;
   }
 
-  // Check for stored token
+  if (code) {
+    history.replaceState(null, '', window.location.pathname);
+    try {
+      const data = await exchangeCodeForToken(code);
+      accessToken = data.access_token;
+      localStorage.setItem('spotify_access_token', data.access_token);
+      const expiry = Date.now() + (data.expires_in || 3600) * 1000;
+      localStorage.setItem('spotify_token_expiry', expiry);
+      showAppScreen();
+    } catch(e) {
+      showSetupScreen();
+      showSetupError('Failed to get token: ' + e.message);
+    }
+    return;
+  }
+
+  // Check for stored valid token
   const stored = localStorage.getItem('spotify_access_token');
   const expiry = parseInt(localStorage.getItem('spotify_token_expiry') || '0');
   if (stored && Date.now() < expiry) {
@@ -1101,7 +1147,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   showSetupScreen();
-})();
+}
+
+init();
 </script>
 </body>
 </html>
