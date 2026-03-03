@@ -870,23 +870,27 @@ async function lookupAlbum() {
 
   errEl.innerHTML = '';
   if (!albumId) {
-    errEl.innerHTML = '<div class="error-box">Couldn\'t parse that link. Paste a Spotify album URL or URI.</div>';
+    errEl.innerHTML = '<div class="error-box">Could not parse that link. Paste a Spotify album URL or URI.</div>';
     return;
   }
 
-  outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching from Spotify…</span></div>';
-
   try {
-    // Fetch album + tracks (no batch /tracks call — restricted in dev mode)
-    const [album, tracksData] = await Promise.all([
-      spotifyFetch(`/albums/${albumId}`),
-      spotifyFetch(`/albums/${albumId}/tracks?limit=50`)
-    ]);
+    // Step 1: verify token works
+    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Verifying token...</span></div>';
+    await spotifyFetch('/me');
+
+    // Step 2: fetch album
+    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching album...</span></div>';
+    const album = await spotifyFetch('/albums/' + albumId);
+
+    // Step 3: fetch tracks
+    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching tracks...</span></div>';
+    const tracksData = await spotifyFetch('/albums/' + albumId + '/tracks?limit=50');
 
     renderAlbum(album, tracksData, []);
   } catch(e) {
     outEl.innerHTML = '';
-    errEl.innerHTML = `<div class="error-box">${e.message}</div>`;
+    errEl.innerHTML = '<div class="error-box">' + e.message + '</div>';
   }
 }
 
