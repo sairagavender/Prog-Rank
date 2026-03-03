@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Album Lens — Spotify Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #1DB954;
+    --green-dim: #158a3e;
+    --bg: #080b08;
+    --surface: #0f140f;
+    --surface2: #161d16;
+    --border: #1e281e;
+    --text: #e8f0e8;
+    --muted: #5a6e5a;
+    --accent: #b5f0c4;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.4;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky; top: 0;
+    background: rgba(8,11,8,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: var(--green);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .logo-mark svg { width: 18px; height: 18px; }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.2rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .logo-text span { color: var(--green); }
+
+  .auth-badge {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.live { background: var(--green); animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 24px 100px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* SETUP SCREEN */
+  #setup-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-top: 40px;
+  }
+
+  .setup-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 16px;
+  }
+
+  .setup-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.2rem, 6vw, 3.8rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  .setup-sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    max-width: 500px;
+    margin-bottom: 48px;
+  }
+
+  .steps {
+    width: 100%;
+    max-width: 580px;
+    text-align: left;
+    margin-bottom: 40px;
+  }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+
+  .step:last-child { border-bottom: none; }
+
+  .step-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    padding-top: 3px;
+    flex-shrink: 0;
+    width: 28px;
+  }
+
+  .step-content h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  .step-content p {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  .step-content code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: var(--accent);
+    font-size: 0.75rem;
+  }
+
+  .client-id-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 580px;
+    margin-bottom: 16px;
+  }
+
+  .input-field {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    padding: 12px 16px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-field:focus { border-color: var(--green); }
+  .input-field::placeholder { color: var(--muted); }
+
+  .btn {
+    background: var(--green);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: #23e865; }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { background: var(--muted); cursor: not-allowed; }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-outline:hover { border-color: var(--green); color: var(--green); }
+
+  /* APP SCREEN */
+  #app-screen { display: none; }
+
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 48px;
+  }
+
+  .search-bar .input-field {
+    font-size: 0.82rem;
+    padding: 14px 18px;
+  }
+
+  /* Album Hero */
+  .album-hero {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 36px;
+    margin-bottom: 48px;
+    padding: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .album-hero-bg {
+    position: absolute; inset: 0;
+    filter: blur(80px) saturate(1.5);
+    opacity: 0.12;
+    background-size: cover;
+    pointer-events: none;
+  }
+
+  .album-art {
+    width: 220px; height: 220px;
+    border-radius: 10px;
+    object-fit: cover;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    position: relative;
+    z-index: 1;
+  }
+
+  .album-meta {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .album-type {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+
+  .album-name {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .album-artist {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .album-artist a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .album-artist a:hover { text-decoration: underline; }
+
+  .meta-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 5px 12px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  .pill.green {
+    background: rgba(29,185,84,0.1);
+    border-color: rgba(29,185,84,0.3);
+    color: var(--green);
+  }
+
+  .open-spotify {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--green);
+    color: #000;
+    text-decoration: none;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 10px 18px;
+    border-radius: 100px;
+    width: fit-content;
+    transition: background 0.15s;
+  }
+
+  .open-spotify:hover { background: #23e865; }
+
+  /* Section */
+  .section {
+    margin-bottom: 36px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .section-count {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  /* Stat grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .stat-value.green { color: var(--green); }
+
+  /* Track list */
+  .track-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .track-row {
+    display: grid;
+    grid-template-columns: 32px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    cursor: default;
+  }
+
+  .track-row:hover { background: var(--surface2); }
+
+  .track-num {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .track-info { min-width: 0; }
+
+  .track-name {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+
+  .track-artists {
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .track-explicit {
+    background: var(--muted);
+    color: var(--bg);
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+
+  .track-duration {
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* Popularity bar */
+  .popularity-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .popularity-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  /* Copyright / labels */
+  .label-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .label-item {
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  /* Loading state */
+  .loading-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    gap: 16px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-box {
+    background: rgba(255,60,60,0.08);
+    border: 1px solid rgba(255,60,60,0.25);
+    color: #ff7070;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-bottom: 24px;
+  }
+
+  /* Artist cards */
+  .artist-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .artist-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 8px 16px 8px 8px;
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+
+  .artist-chip:hover { border-color: var(--green); }
+
+  .artist-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface2);
+  }
+
+  .artist-chip-name {
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  /* Image grid */
+  .img-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+
+  .img-grid-item {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .img-grid-item img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  .img-dim {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.7);
+    font-size: 0.6rem;
+    color: var(--muted);
+    padding: 4px 6px;
+    text-align: center;
+  }
+
+  /* Raw JSON */
+  .json-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 10px 0;
+    border: none;
+    background: none;
+    transition: color 0.2s;
+  }
+
+  .json-toggle:hover { color: var(--text); }
+
+  .json-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    font-size: 0.72rem;
+    color: var(--accent);
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 16px 20px; }
+    main { padding: 36px 16px 80px; }
+    .album-hero { grid-template-columns: 1fr; }
+    .album-art { width: 100%; height: auto; aspect-ratio: 1; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Transitions */
+  .fade-in {
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" fill="black"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/><path d="M8 10.5C9.38 9.57 11.5 9 14 9v2c-2 0-3.7.5-5 1.5V10.5zm0 4c1.38-.93 3.5-1.5 6-1.5v2c-2.5 0-4.62.57-6 1.5V14.5z"/></svg>
+  </div>
+  <span class="logo-text">Album<span>Lens</span></span>
+  <div class="auth-badge">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">not connected</span>
+    <button class="btn-outline" id="logout-btn" style="display:none;margin-left:8px;font-size:0.7rem;padding:6px 14px;" onclick="logout()">Disconnect</button>
+  </div>
+</header>
+
+<main>
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen">
+    <div class="setup-eyebrow">Spotify API Explorer</div>
+    <h1 class="setup-title">Every detail<br>of any album.</h1>
+    <p class="setup-sub">Enter your Spotify app's Client ID to authenticate. No backend required — uses Spotify's browser-based auth flow.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <h3>Go to Spotify Developer Dashboard</h3>
+          <p>Visit <code>developer.spotify.com/dashboard</code> and log in with your Spotify account.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <h3>Create an App</h3>
+          <p>Click <strong style="color:var(--text)">Create App</strong>. Give it any name. Set the Redirect URI to exactly: <code id="redirect-uri-display"></code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <h3>Copy your Client ID</h3>
+          <p>In your app's settings, copy the <strong style="color:var(--text)">Client ID</strong> (not the secret — we don't need it).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <h3>Paste below & Connect</h3>
+          <p>Paste your Client ID, hit Connect, and authorize AlbumLens with your Spotify account.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="client-id-row">
+      <input class="input-field" type="text" id="client-id-input" placeholder="Paste your Client ID here…" />
+      <button class="btn" onclick="startAuth()">Connect →</button>
+    </div>
+    <div id="setup-error"></div>
+  </div>
+
+  <!-- APP SCREEN -->
+  <div id="app-screen">
+    <div class="search-bar">
+      <input class="input-field" type="text" id="album-url-input" placeholder="Paste Spotify album link or URI…" />
+      <button class="btn" id="search-btn" onclick="lookupAlbum()">Look Up</button>
+    </div>
+    <div id="error-display"></div>
+    <div id="album-output"></div>
+  </div>
+</main>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const REDIRECT_URI = window.location.href.split('?')[0].split('#')[0];
+document.getElementById('redirect-uri-display').textContent = REDIRECT_URI;
+
+let accessToken = null;
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+function getClientId() {
+  return localStorage.getItem('spotify_client_id') || '';
+}
+
+function startAuth() {
+  const clientId = document.getElementById('client-id-input').value.trim();
+  if (!clientId || clientId.length < 20) {
+    showSetupError('Please enter a valid Client ID.');
+    return;
+  }
+  localStorage.setItem('spotify_client_id', clientId);
+
+  const scopes = 'user-read-private user-read-email';
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'token',
+    redirect_uri: REDIRECT_URI,
+    scope: scopes,
+    show_dialog: 'true'
+  });
+  window.location.href = `https://accounts.spotify.com/authorize?${params}`;
+}
+
+function parseHash() {
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  return {
+    token: params.get('access_token'),
+    expires: params.get('expires_in')
+  };
+}
+
+function logout() {
+  localStorage.removeItem('spotify_access_token');
+  localStorage.removeItem('spotify_token_expiry');
+  accessToken = null;
+  showSetupScreen();
+}
+
+function showSetupError(msg) {
+  document.getElementById('setup-error').innerHTML = `<div class="error-box">${msg}</div>`;
+}
+
+// ─── Screen Management ─────────────────────────────────────────────────────────
+function showSetupScreen() {
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('status-dot').className = 'dot';
+  document.getElementById('status-text').textContent = 'not connected';
+  document.getElementById('logout-btn').style.display = 'none';
+  const savedId = getClientId();
+  if (savedId) document.getElementById('client-id-input').value = savedId;
+}
+
+function showAppScreen() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('status-dot').className = 'dot live';
+  document.getElementById('status-text').textContent = 'connected';
+  document.getElementById('logout-btn').style.display = 'inline-block';
+}
+
+// ─── API ───────────────────────────────────────────────────────────────────────
+async function spotifyFetch(endpoint) {
+  const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) throw new Error(`Spotify API error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+function extractAlbumId(input) {
+  input = input.trim();
+  // URI format: spotify:album:ID
+  const uriMatch = input.match(/spotify:album:([A-Za-z0-9]+)/);
+  if (uriMatch) return uriMatch[1];
+  // URL format: open.spotify.com/album/ID
+  const urlMatch = input.match(/spotify\.com\/album\/([A-Za-z0-9]+)/);
+  if (urlMatch) return urlMatch[1];
+  // Raw ID (22 chars alphanumeric)
+  if (/^[A-Za-z0-9]{22}$/.test(input)) return input;
+  return null;
+}
+
+async function lookupAlbum() {
+  const input = document.getElementById('album-url-input').value.trim();
+  const albumId = extractAlbumId(input);
+  const errEl = document.getElementById('error-display');
+  const outEl = document.getElementById('album-output');
+
+  errEl.innerHTML = '';
+  if (!albumId) {
+    errEl.innerHTML = '<div class="error-box">Couldn\'t parse that link. Paste a Spotify album URL or URI.</div>';
+    return;
+  }
+
+  outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching from Spotify…</span></div>';
+
+  try {
+    // Fetch album + tracks
+    const [album, tracksData] = await Promise.all([
+      spotifyFetch(`/albums/${albumId}`),
+      spotifyFetch(`/albums/${albumId}/tracks?limit=50`)
+    ]);
+
+    // Get full track objects for popularity
+    const trackIds = tracksData.items.map(t => t.id).join(',');
+    const fullTracks = trackIds ? await spotifyFetch(`/tracks?ids=${trackIds}`) : { tracks: [] };
+
+    renderAlbum(album, tracksData, fullTracks.tracks || []);
+  } catch(e) {
+    outEl.innerHTML = '';
+    errEl.innerHTML = `<div class="error-box">${e.message}</div>`;
+  }
+}
+
+// ─── Render ────────────────────────────────────────────────────────────────────
+function msToTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = String(totalSec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function totalDuration(tracks) {
+  const ms = tracks.reduce((a, t) => a + (t.duration_ms || 0), 0);
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function avgPopularity(tracks) {
+  if (!tracks.length) return 0;
+  return Math.round(tracks.reduce((a,t) => a + (t.popularity||0), 0) / tracks.length);
+}
+
+function renderAlbum(album, tracksData, fullTracks) {
+  const out = document.getElementById('album-output');
+  const tracks = tracksData.items;
+  const coverUrl = album.images?.[0]?.url || '';
+
+  let html = `<div class="fade-in">`;
+
+  // ── Hero ──
+  html += `
+  <div class="album-hero">
+    <div class="album-hero-bg" style="background-image:url('${coverUrl}')"></div>
+    ${coverUrl ? `<img class="album-art" src="${coverUrl}" alt="${escape(album.name)}">` : ''}
+    <div class="album-meta">
+      <div class="album-type">${album.album_type?.toUpperCase() || 'ALBUM'}</div>
+      <div class="album-name">${album.name}</div>
+      <div class="album-artist">
+        by ${album.artists?.map(a => `<a href="${a.external_urls?.spotify}" target="_blank">${a.name}</a>`).join(', ')}
+      </div>
+      <div class="meta-pills">
+        <span class="pill">${album.release_date}</span>
+        <span class="pill">${tracks.length} track${tracks.length !== 1 ? 's' : ''}</span>
+        ${album.label ? `<span class="pill">${album.label}</span>` : ''}
+        ${album.explicit ? '<span class="pill green">EXPLICIT</span>' : ''}
+        ${album.total_tracks > tracks.length ? `<span class="pill">${album.total_tracks} total (multi-disc)</span>` : ''}
+      </div>
+      <a class="open-spotify" href="${album.external_urls?.spotify}" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+        Open in Spotify
+      </a>
+    </div>
+  </div>`;
+
+  // ── Stats ──
+  html += `
+  <div class="section">
+    <div class="section-header"><div class="section-title">At a Glance</div></div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Release Date</div>
+        <div class="stat-value" style="font-size:1rem">${album.release_date}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tracks</div>
+        <div class="stat-value green">${album.total_tracks}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Duration</div>
+        <div class="stat-value" style="font-size:1.1rem">${totalDuration(fullTracks.length ? fullTracks : tracks)}</div>
+      </div>
+      ${fullTracks.length ? `<div class="stat-card">
+        <div class="stat-label">Avg. Popularity</div>
+        <div class="stat-value green">${avgPopularity(fullTracks)}<span style="font-size:0.7rem;color:var(--muted)">/100</span></div>
+      </div>` : ''}
+      <div class="stat-card">
+        <div class="stat-label">Markets</div>
+        <div class="stat-value">${album.available_markets?.length || '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Album ID</div>
+        <div class="stat-value" style="font-size:0.65rem;letter-spacing:0.02em;word-break:break-all">${album.id}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Tracks ──
+  html += `
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Tracklist</div>
+      <div class="section-count">${tracks.length} tracks</div>
+    </div>
+    <div class="track-list">`;
+
+  tracks.forEach((t, i) => {
+    const full = fullTracks.find(f => f?.id === t.id);
+    const pop = full?.popularity ?? null;
+    html += `
+    <div class="track-row">
+      <div class="track-num">${t.track_number}</div>
+      <div class="track-info">
+        <div class="track-name">${t.name}</div>
+        <div class="track-artists">${t.artists?.map(a=>a.name).join(', ')}</div>
+        ${pop !== null ? `<div class="popularity-bar"><div class="popularity-fill" style="width:${pop}%"></div></div>` : ''}
+      </div>
+      ${t.explicit ? '<span class="track-explicit">E</span>' : '<span></span>'}
+      <div class="track-duration">${msToTime(t.duration_ms)}</div>
+    </div>`;
+  });
+
+  html += `</div></div>`;
+
+  // ── Artists ──
+  if (album.artists?.length) {
+    html += `
+    <div class="section">
+      <div class="section-header"><div class="section-title">Artists</div></div>
+      <div class="artist-grid">`;
+    album.artists.forEach(a => {
+      html += `
+      <a class="artist-chip" href="${a.external_urls?.spotify}" target="_blank">
+        <div class="artist-avatar" style="background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--muted)">♪</div>
+        <span class="artist-chip-name">${a.name}</span>
+      </a>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // ── Cover Art Sizes ──
+  if (album.images?.length) {
+    html += `
+    <div class="section">
+      <div class="section-header"><div class="section-title">Cover Art</div><div class="section-count">${album.images.length} sizes</div></div>
+      <div class="img-grid">`;
+    album.images.forEach(img => {
+      html += `
+      <div class="img-grid-item">
+        <img src="${img.url}" alt="cover art" loading="lazy">
+        <div class="img-dim">${img.width}×${img.height}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // ── Copyrights ──
+  if (album.copyrights?.length) {
+    html += `
+    <div class="section">
+      <div class="section-header"><div class="section-title">Copyrights</div></div>
+      <div class="label-list">`;
+    album.copyrights.forEach(c => {
+      html += `<div class="label-item"><span style="color:var(--text)">${c.type === 'C' ? '©' : '℗'}</span> ${c.text}</div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // ── External IDs ──
+  if (album.external_ids && Object.keys(album.external_ids).length) {
+    html += `
+    <div class="section">
+      <div class="section-header"><div class="section-title">External IDs</div></div>
+      <div class="stat-grid">`;
+    for (const [k, v] of Object.entries(album.external_ids)) {
+      html += `<div class="stat-card"><div class="stat-label">${k.toUpperCase()}</div><div class="stat-value" style="font-size:0.8rem;word-break:break-all">${v}</div></div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  // ── Genres ──
+  if (album.genres?.length) {
+    html += `
+    <div class="section">
+      <div class="section-header"><div class="section-title">Genres</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${album.genres.map(g => `<span class="pill">${g}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── Raw JSON ──
+  html += `
+  <div class="section">
+    <div class="section-header"><div class="section-title">Raw API Response</div></div>
+    <button class="json-toggle" onclick="toggleJson(this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+      Show raw JSON
+    </button>
+    <pre class="json-block" id="raw-json">${JSON.stringify(album, null, 2)}</pre>
+  </div>`;
+
+  html += `</div>`;
+  out.innerHTML = html;
+}
+
+function toggleJson(btn) {
+  const block = document.getElementById('raw-json');
+  const showing = block.style.display === 'block';
+  block.style.display = showing ? 'none' : 'block';
+  btn.innerHTML = showing
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg> Show raw JSON'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg> Hide raw JSON';
+}
+
+// ─── Enter key support ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('album-url-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupAlbum();
+  });
+  document.getElementById('client-id-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') startAuth();
+  });
+});
+
+// ─── Init ──────────────────────────────────────────────────────────────────────
+(function init() {
+  // Check for token in URL hash (after OAuth redirect)
+  const { token, expires } = parseHash();
+  if (token) {
+    accessToken = token;
+    localStorage.setItem('spotify_access_token', token);
+    const expiry = Date.now() + parseInt(expires || 3600) * 1000;
+    localStorage.setItem('spotify_token_expiry', expiry);
+    // Clean URL
+    history.replaceState(null, '', window.location.pathname);
+    showAppScreen();
+    return;
+  }
+
+  // Check for stored token
+  const stored = localStorage.getItem('spotify_access_token');
+  const expiry = parseInt(localStorage.getItem('spotify_token_expiry') || '0');
+  if (stored && Date.now() < expiry) {
+    accessToken = stored;
+    showAppScreen();
+    return;
+  }
+
+  showSetupScreen();
+})();
+</script>
+</body>
+</html>
