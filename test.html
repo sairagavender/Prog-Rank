@@ -1,1134 +1,2055 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Album Lens — Spotify Deep Dive</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --green: #1DB954;
-    --green-dim: #158a3e;
-    --bg: #080b08;
-    --surface: #0f140f;
-    --surface2: #161d16;
-    --border: #1e281e;
-    --text: #e8f0e8;
-    --muted: #5a6e5a;
-    --accent: #b5f0c4;
-  }
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'DM Mono', monospace;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Noise overlay */
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 999;
-    opacity: 0.4;
-  }
-
-  .grid-bg {
-    position: fixed; inset: 0;
-    background-image: linear-gradient(var(--border) 1px, transparent 1px),
-                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 40px 40px;
-    opacity: 0.3;
-    pointer-events: none;
-  }
-
-  header {
-    border-bottom: 1px solid var(--border);
-    padding: 20px 40px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    position: sticky; top: 0;
-    background: rgba(8,11,8,0.92);
-    backdrop-filter: blur(12px);
-    z-index: 100;
-  }
-
-  .logo-mark {
-    width: 32px; height: 32px;
-    background: var(--green);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .logo-mark svg { width: 18px; height: 18px; }
-
-  .logo-text {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1.2rem;
-    letter-spacing: -0.02em;
-    color: var(--text);
-  }
-
-  .logo-text span { color: var(--green); }
-
-  .auth-badge {
-    margin-left: auto;
-    display: flex; align-items: center; gap: 8px;
-    font-size: 0.72rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-  }
-
-  .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .dot.live { background: var(--green); animation: pulse 2s infinite; }
-
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  main {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 60px 24px 100px;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* SETUP SCREEN */
-  #setup-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding-top: 40px;
-  }
-
-  .setup-eyebrow {
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--green);
-    margin-bottom: 16px;
-  }
-
-  .setup-title {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(2.2rem, 6vw, 3.8rem);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -0.03em;
-    margin-bottom: 20px;
-    color: var(--text);
-  }
-
-  .setup-sub {
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.7;
-    max-width: 500px;
-    margin-bottom: 48px;
-  }
-
-  .steps {
-    width: 100%;
-    max-width: 580px;
-    text-align: left;
-    margin-bottom: 40px;
-  }
-
-  .step {
-    display: flex;
-    gap: 16px;
-    padding: 20px 0;
-    border-bottom: 1px solid var(--border);
-    align-items: flex-start;
-  }
-
-  .step:last-child { border-bottom: none; }
-
-  .step-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--green);
-    letter-spacing: 0.1em;
-    padding-top: 3px;
-    flex-shrink: 0;
-    width: 28px;
-  }
-
-  .step-content h3 {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--text);
-  }
-
-  .step-content p {
-    font-size: 0.78rem;
-    color: var(--muted);
-    line-height: 1.65;
-  }
-
-  .step-content code {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    padding: 2px 7px;
-    border-radius: 4px;
-    color: var(--accent);
-    font-size: 0.75rem;
-  }
-
-  .client-id-row {
-    display: flex;
-    gap: 10px;
-    width: 100%;
-    max-width: 580px;
-    margin-bottom: 16px;
-  }
-
-  .input-field {
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.82rem;
-    padding: 12px 16px;
-    border-radius: 8px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  .input-field:focus { border-color: var(--green); }
-  .input-field::placeholder { color: var(--muted); }
-
-  .btn {
-    background: var(--green);
-    color: #000;
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 0.82rem;
-    letter-spacing: 0.03em;
-    padding: 12px 24px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-    white-space: nowrap;
-  }
-
-  .btn:hover { background: #23e865; }
-  .btn:active { transform: scale(0.97); }
-  .btn:disabled { background: var(--muted); cursor: not-allowed; }
-
-  .btn-outline {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    font-weight: 600;
-    font-size: 0.8rem;
-    padding: 10px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
-  }
-
-  .btn-outline:hover { border-color: var(--green); color: var(--green); }
-
-  /* APP SCREEN */
-  #app-screen { display: none; }
-
-  .search-bar {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 48px;
-  }
-
-  .search-bar .input-field {
-    font-size: 0.82rem;
-    padding: 14px 18px;
-  }
-
-  /* Album Hero */
-  .album-hero {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 36px;
-    margin-bottom: 48px;
-    padding: 32px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .album-hero-bg {
-    position: absolute; inset: 0;
-    filter: blur(80px) saturate(1.5);
-    opacity: 0.12;
-    background-size: cover;
-    pointer-events: none;
-  }
-
-  .album-art {
-    width: 220px; height: 220px;
-    border-radius: 10px;
-    object-fit: cover;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-    position: relative;
-    z-index: 1;
-  }
-
-  .album-meta {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    position: relative;
-    z-index: 1;
-  }
-
-  .album-type {
-    font-size: 0.68rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--green);
-    margin-bottom: 8px;
-  }
-
-  .album-name {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(1.6rem, 3vw, 2.4rem);
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.1;
-    margin-bottom: 10px;
-    color: var(--text);
-  }
-
-  .album-artist {
-    font-size: 0.9rem;
-    color: var(--muted);
-    margin-bottom: 20px;
-  }
-
-  .album-artist a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-
-  .album-artist a:hover { text-decoration: underline; }
-
-  .meta-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 20px;
-  }
-
-  .pill {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    padding: 5px 12px;
-    font-size: 0.72rem;
-    color: var(--muted);
-    letter-spacing: 0.03em;
-  }
-
-  .pill.green {
-    background: rgba(29,185,84,0.1);
-    border-color: rgba(29,185,84,0.3);
-    color: var(--green);
-  }
-
-  .open-spotify {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--green);
-    color: #000;
-    text-decoration: none;
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 0.78rem;
-    padding: 10px 18px;
-    border-radius: 100px;
-    width: fit-content;
-    transition: background 0.15s;
-  }
-
-  .open-spotify:hover { background: #23e865; }
-
-  /* Section */
-  .section {
-    margin-bottom: 36px;
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .section-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text);
-  }
-
-  .section-count {
-    font-size: 0.7rem;
-    color: var(--muted);
-    margin-left: auto;
-  }
-
-  /* Stat grid */
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-  }
-
-  .stat-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-
-  .stat-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .stat-value.green { color: var(--green); }
-
-  /* Track list */
-  .track-list { display: flex; flex-direction: column; gap: 2px; }
-
-  .track-row {
-    display: grid;
-    grid-template-columns: 32px 1fr auto auto;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    transition: background 0.15s;
-    cursor: default;
-  }
-
-  .track-row:hover { background: var(--surface2); }
-
-  .track-num {
-    font-size: 0.72rem;
-    color: var(--muted);
-    text-align: center;
-  }
-
-  .track-info { min-width: 0; }
-
-  .track-name {
-    font-size: 0.82rem;
-    font-weight: 400;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 2px;
-  }
-
-  .track-artists {
-    font-size: 0.7rem;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .track-explicit {
-    background: var(--muted);
-    color: var(--bg);
-    font-size: 0.55rem;
-    font-weight: 700;
-    padding: 2px 5px;
-    border-radius: 3px;
-    letter-spacing: 0.05em;
-  }
-
-  .track-duration {
-    font-size: 0.72rem;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  /* Popularity bar */
-  .popularity-bar {
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 4px;
-  }
-
-  .popularity-fill {
-    height: 100%;
-    background: var(--green);
-    border-radius: 2px;
-    transition: width 0.6s ease;
-  }
-
-  /* Copyright / labels */
-  .label-list { display: flex; flex-direction: column; gap: 8px; }
-
-  .label-item {
-    font-size: 0.75rem;
-    color: var(--muted);
-    padding: 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-
-  /* Loading state */
-  .loading-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px;
-    gap: 16px;
-    color: var(--muted);
-    font-size: 0.8rem;
-  }
-
-  .spinner {
-    width: 36px; height: 36px;
-    border: 2px solid var(--border);
-    border-top-color: var(--green);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Error */
-  .error-box {
-    background: rgba(255,60,60,0.08);
-    border: 1px solid rgba(255,60,60,0.25);
-    color: #ff7070;
-    padding: 14px 18px;
-    border-radius: 10px;
-    font-size: 0.8rem;
-    margin-bottom: 24px;
-  }
-
-  /* Artist cards */
-  .artist-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .artist-chip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    padding: 8px 16px 8px 8px;
-    text-decoration: none;
-    transition: border-color 0.2s;
-  }
-
-  .artist-chip:hover { border-color: var(--green); }
-
-  .artist-avatar {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-    background: var(--surface2);
-  }
-
-  .artist-chip-name {
-    font-size: 0.8rem;
-    color: var(--text);
-  }
-
-  /* Image grid */
-  .img-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px;
-  }
-
-  .img-grid-item {
-    aspect-ratio: 1;
-    border-radius: 8px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .img-grid-item img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-  }
-
-  .img-dim {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    background: rgba(0,0,0,0.7);
-    font-size: 0.6rem;
-    color: var(--muted);
-    padding: 4px 6px;
-    text-align: center;
-  }
-
-  /* Raw JSON */
-  .json-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.75rem;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 10px 0;
-    border: none;
-    background: none;
-    transition: color 0.2s;
-  }
-
-  .json-toggle:hover { color: var(--text); }
-
-  .json-block {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px;
-    font-size: 0.72rem;
-    color: var(--accent);
-    overflow-x: auto;
-    max-height: 400px;
-    overflow-y: auto;
-    white-space: pre;
-    display: none;
-  }
-
-  @media (max-width: 600px) {
-    header { padding: 16px 20px; }
-    main { padding: 36px 16px 80px; }
-    .album-hero { grid-template-columns: 1fr; }
-    .album-art { width: 100%; height: auto; aspect-ratio: 1; }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-
-  /* Transitions */
-  .fade-in {
-    animation: fadeIn 0.4s ease;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prog Rank</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #171717; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #525252; }
+
+        /* Dragging Classes */
+        .dragging { opacity: 0.5; border: 2px dashed #a855f7; }
+        
+        /* Animation */
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+        .notification-toast { animation: fadeInOut 3s forwards; }
+
+        /* Range Slider */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%; background: #a855f7;
+            cursor: pointer; margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer; background: #404040;
+            border-radius: 2px;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-neutral-900 text-neutral-100 h-screen flex flex-col overflow-hidden selection:bg-purple-500 selection:text-white">
+    <!-- Header -->
+    <header class="p-4 border-b border-neutral-800 flex flex-col md:flex-row gap-4 md:items-center justify-between z-10 bg-neutral-900/95 backdrop-blur shrink-0 transition-all duration-300" id="header-container">
+        <!-- Injected by JS -->
+    </header>
+    
+    <!-- Global Search Results -->
+    <div id="global-search-results" class="absolute top-[80px] left-4 right-4 md:left-20 md:w-96 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 hidden max-h-96 overflow-y-auto custom-scrollbar"></div>
 
-<div class="grid-bg"></div>
+    <!-- Main Content Area -->
+    <main id="main-content" class="flex-1 relative overflow-hidden w-full h-full">
+        <!-- Content injected by JS -->
+    </main>
 
-<header>
-  <div class="logo-mark">
-    <svg viewBox="0 0 24 24" fill="black"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/><path d="M8 10.5C9.38 9.57 11.5 9 14 9v2c-2 0-3.7.5-5 1.5V10.5zm0 4c1.38-.93 3.5-1.5 6-1.5v2c-2.5 0-4.62.57-6 1.5V14.5z"/></svg>
-  </div>
-  <span class="logo-text">Album<span>Lens</span></span>
-  <div class="auth-badge">
-    <div class="dot" id="status-dot"></div>
-    <span id="status-text">not connected</span>
-    <button class="btn-outline" id="logout-btn" style="display:none;margin-left:8px;font-size:0.7rem;padding:6px 14px;" onclick="logout()">Disconnect</button>
-  </div>
-</header>
+    <!-- Notification Toast -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
-<main>
-  <!-- SETUP SCREEN -->
-  <div id="setup-screen">
-    <div class="setup-eyebrow">Spotify API Explorer</div>
-    <h1 class="setup-title">Every detail<br>of any album.</h1>
-    <p class="setup-sub">Enter your Spotify app's Client ID to authenticate. No backend required — uses Spotify's browser-based auth flow.</p>
-
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">01</div>
-        <div class="step-content">
-          <h3>Go to Spotify Developer Dashboard</h3>
-          <p>Visit <code>developer.spotify.com/dashboard</code> and log in with your Spotify account.</p>
+    <!-- Modal: Spotify Settings -->
+    <div id="settings-modal-overlay" class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-lg rounded-2xl shadow-2xl p-8 relative">
+            <button onclick="closeSettingsModal()" class="absolute top-4 right-4 text-neutral-500 hover:text-white"><i data-lucide="x" class="w-6 h-6"></i></button>
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2"><i data-lucide="settings" class="w-6 h-6"></i> Settings</h2>
+            
+            <div class="bg-neutral-800 p-5 rounded-xl border border-neutral-700">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-2">
+                    <svg viewBox="0 0 24 24" class="w-5 h-5 text-green-500 fill-current"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.84.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.84.241 1.2zM20.16 9.6C16.44 7.38 9.54 7.2 5.58 8.4c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.68-1.38 12.18-1.14 16.5 1.44.54.3.72 1.02.42 1.56-.24.6-.96.78-1.68.3z"/></svg> 
+                    Spotify Integration
+                </h3>
+                <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
+                    Connect your Spotify account to auto-fill album/song details.<br><br>
+                    <strong>Setup Guide:</strong><br>
+                    1. Go to <a href="https://developer.spotify.com/dashboard" target="_blank" class="text-green-400 hover:underline font-bold">Spotify Developer Dashboard</a> and create an app.<br>
+                    2. In settings, set the Redirect URI exactly to:<br><code class="bg-black/50 px-2 py-1 rounded text-purple-300 block mt-1 break-all">https://prog-rank.vercel.app/</code><br>
+                    3. Copy your <strong>Client ID</strong> and paste it below.<br>
+                    <em>Note: Only works for Spotify Premium members for full features (metadata fetches still work for free users).</em>
+                </p>
+                <input type="text" id="input-spotify-client-id" class="w-full bg-neutral-900 border border-neutral-700 focus:border-green-500 focus:ring-0 rounded-lg px-4 py-2.5 text-white text-sm mb-3 font-mono" placeholder="Paste your Client ID here...">
+                <button onclick="authSpotify()" class="w-full bg-green-500 hover:bg-green-400 text-black py-2.5 rounded-lg font-bold transition-colors flex items-center justify-center gap-2">
+                    Connect to Spotify
+                </button>
+            </div>
         </div>
-      </div>
-      <div class="step">
-        <div class="step-num">02</div>
-        <div class="step-content">
-          <h3>Create an App</h3>
-          <p>Click <strong style="color:var(--text)">Create App</strong>. Give it any name. Set the Redirect URI to exactly: <code id="redirect-uri-display"></code></p>
+    </div>
+
+    <!-- Modal: Setup (First Time) -->
+    <div id="setup-modal-overlay" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden p-8">
+            <h1 class="text-3xl font-black text-center mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">Welcome to Prog Rank</h1>
+            <p class="text-center text-neutral-400 mb-8">How would you like to rank your music? This choice is <strong>irreversible</strong> for your main list.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button onclick="selectMainListType('albums')" class="group p-6 rounded-xl bg-neutral-800 border-2 border-neutral-700 hover:border-purple-500 hover:bg-neutral-800/80 transition-all text-left relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-12 h-12 bg-neutral-900 rounded-full flex items-center justify-center mb-4 text-purple-400 group-hover:scale-110 transition-transform"><i data-lucide="disc" class="w-6 h-6"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-2">Album Mode</h3>
+                    <p class="text-sm text-neutral-400 leading-relaxed">Rank entire albums. Click on an album to open it and rank its individual songs.</p>
+                    <ul class="mt-4 space-y-2 text-xs text-neutral-500">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Deep Discography Organization</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Best for Album Listeners</li>
+                    </ul>
+                </button>
+
+                <button onclick="selectMainListType('songs')" class="group p-6 rounded-xl bg-neutral-800 border-2 border-neutral-700 hover:border-blue-500 hover:bg-neutral-800/80 transition-all text-left relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-12 h-12 bg-neutral-900 rounded-full flex items-center justify-center mb-4 text-blue-400 group-hover:scale-110 transition-transform"><i data-lucide="music" class="w-6 h-6"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-2">Song Mode</h3>
+                    <p class="text-sm text-neutral-400 leading-relaxed">Rank individual songs directly on the main list. Simple and direct.</p>
+                    <ul class="mt-4 space-y-2 text-xs text-neutral-500">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Casual / Normie Friendly</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Cover Art Optional</li>
+                    </ul>
+                </button>
+            </div>
+            <p class="mt-6 text-xs text-center text-neutral-600">This will configure your "Main List" and Global Ranking logic.</p>
         </div>
-      </div>
-      <div class="step">
-        <div class="step-num">03</div>
-        <div class="step-content">
-          <h3>Copy your Client ID</h3>
-          <p>In your app's settings, copy the <strong style="color:var(--text)">Client ID</strong> (not the secret — we don't need it).</p>
+    </div>
+
+    <!-- Modal: Add/Edit Item -->
+    <div id="modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200 flex flex-col max-h-[90vh]" id="modal-content">
+            <div class="p-6 overflow-y-auto custom-scrollbar">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modal-title" class="text-2xl font-bold">Add New Item</h2>
+                    <button id="btn-close-modal" class="text-neutral-500 hover:text-white"><i data-lucide="x" class="w-6 h-6"></i></button>
+                </div>
+
+                <!-- Spotify Auto-fill Section -->
+                <div id="spotify-autofill-section" class="mb-6 p-3 bg-green-900/10 border border-green-500/20 rounded-xl">
+                    <label class="block text-[10px] uppercase tracking-wider text-green-500 font-bold mb-2"><i data-lucide="zap" class="w-3 h-3 inline"></i> Spotify Auto-Fill</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="input-spotify-autofill" class="flex-1 bg-neutral-900 border border-neutral-700 focus:border-green-500 focus:ring-0 rounded-lg px-3 py-1.5 text-white text-xs" placeholder="Paste Spotify link...">
+                        <button onclick="fetchSpotifyData()" class="bg-green-500 hover:bg-green-400 text-black px-3 py-1.5 rounded-lg font-bold text-xs transition-colors flex items-center gap-1">Fetch</button>
+                    </div>
+                </div>
+
+                <!-- Library Search -->
+                <div id="library-search-section" class="mb-6 hidden">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500"></i>
+                        <input type="text" id="input-search-library" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg pl-10 pr-4 py-2 text-white placeholder-neutral-500 text-sm" placeholder="Search library...">
+                    </div>
+                    <div id="library-results" class="mt-2 space-y-2 max-h-40 overflow-y-auto custom-scrollbar hidden"></div>
+                    <div class="mt-4 flex items-center gap-2">
+                        <div class="h-px bg-neutral-800 flex-1"></div>
+                        <span class="text-xs text-neutral-500 uppercase">Or Create New</span>
+                        <div class="h-px bg-neutral-800 flex-1"></div>
+                    </div>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="space-y-4">
+                    <!-- Image -->
+                    <div class="flex flex-col items-center mb-4" id="cover-section">
+                        <div id="cover-upload-trigger" class="w-32 h-32 rounded-xl bg-neutral-800 border-2 border-dashed border-neutral-600 hover:border-purple-500 hover:bg-neutral-800/80 cursor-pointer flex flex-col items-center justify-center transition-all overflow-hidden relative group mb-3">
+                            <div id="cover-preview-container" class="w-full h-full absolute inset-0 hidden">
+                                <img id="cover-preview" src="" alt="Preview" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i data-lucide="upload" class="w-6 h-6 text-white"></i>
+                                </div>
+                            </div>
+                            <div id="cover-placeholder" class="flex flex-col items-center">
+                                <i data-lucide="image" class="w-8 h-8 text-neutral-500 mb-2"></i>
+                                <span class="text-xs text-neutral-400" id="cover-label-text">Cover Art *</span>
+                            </div>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/*">
+                        <div class="w-full relative" id="cover-url-container">
+                            <i data-lucide="link" class="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500"></i>
+                            <input type="text" id="input-cover-url" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-neutral-500" placeholder="Or paste image URL...">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1" id="label-title">Title <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-title" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="e.g. In Rainbows">
+                    </div>
+
+                    <div id="field-artist-container" class="relative">
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Artist <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-artist" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="Search or Type Artist...">
+                        <div class="text-[10px] text-neutral-500 mt-1">For multiple, separate with commas.</div>
+                        <div id="artist-suggestions" class="absolute left-0 right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 hidden max-h-32 overflow-y-auto custom-scrollbar"></div>
+                    </div>
+
+                    <div id="field-link-container">
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Spotify Link (Optional)</label>
+                        <input type="text" id="input-link" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="https://open.spotify.com/...">
+                    </div>
+
+                    <!-- Remarks Field -->
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Remarks / Review</label>
+                        <textarea id="input-remarks" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none text-sm resize-none h-20" placeholder="Your thoughts..."></textarea>
+                    </div>
+
+                    <div class="pt-4 flex gap-3">
+                        <button id="btn-delete" class="hidden flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors">
+                            Delete
+                        </button>
+                        <button id="btn-save" class="flex-1 bg-white text-black hover:bg-neutral-200 py-2.5 rounded-lg font-bold transition-colors">
+                            Add to Line
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="step">
-        <div class="step-num">04</div>
-        <div class="step-content">
-          <h3>Paste below & Connect</h3>
-          <p>Paste your Client ID, hit Connect, and authorize AlbumLens with your Spotify account.</p>
+    </div>
+
+    <!-- Modal: Create/Import List -->
+    <div id="list-modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold" id="list-modal-heading">Create New List</h2>
+                    <button id="btn-close-list-modal" class="text-neutral-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div class="flex gap-4 mb-4 border-b border-neutral-800 pb-2" id="list-modal-tabs">
+                    <button id="tab-create" class="text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5">Create</button>
+                    <button id="tab-import" class="text-sm font-bold text-neutral-500 hover:text-white pb-2">Import JSON</button>
+                </div>
+
+                <div id="view-create-list" class="space-y-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">List Name</label>
+                        <input type="text" id="input-list-name" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none" placeholder="e.g. 2024 Favorites">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-list-type" value="albums" class="peer sr-only" checked>
+                            <div class="p-3 rounded-lg border border-neutral-700 bg-neutral-800 peer-checked:border-purple-500 peer-checked:bg-purple-500/10 transition-all text-center">
+                                <span class="font-bold text-sm block">Albums</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-list-type" value="songs" class="peer sr-only">
+                            <div class="p-3 rounded-lg border border-neutral-700 bg-neutral-800 peer-checked:border-blue-500 peer-checked:bg-blue-500/10 transition-all text-center">
+                                <span class="font-bold text-sm block">Songs</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button id="btn-create-list" class="w-full bg-white text-black hover:bg-neutral-200 py-2.5 rounded-lg font-bold transition-colors mt-4">Create List</button>
+                </div>
+
+                <div id="view-import-list" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Paste List Data (JSON)</label>
+                        <textarea id="input-import-json" class="w-full h-32 bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white placeholder-neutral-500 outline-none text-xs font-mono" placeholder='{"name": "My List", "items": [...]}'></textarea>
+                    </div>
+                    <button id="btn-import-list" class="w-full bg-purple-600 text-white hover:bg-purple-500 py-2.5 rounded-lg font-bold transition-colors mt-4">Import List</button>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
 
-    <div class="client-id-row">
-      <input class="input-field" type="text" id="client-id-input" placeholder="Paste your Client ID here…" />
-      <button class="btn" onclick="startAuth()">Connect →</button>
-
+    <!-- Modal: List Options -->
+    <div id="list-options-modal-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-neutral-900 border border-neutral-700 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">List Settings</h2>
+                    <button id="btn-close-options-modal" class="text-neutral-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-1">Rename</label>
+                        <input type="text" id="input-rename-list" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-lg px-4 py-2 text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wider text-neutral-500 mb-2">Card Color</label>
+                        <div class="flex gap-2 flex-wrap" id="color-picker-container"></div>
+                    </div>
+                    <div class="pt-4 border-t border-neutral-800 mt-4 space-y-2">
+                        <button id="btn-pin-list" class="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="pin" class="w-4 h-4"></i> Pin to Top
+                        </button>
+                        <button id="btn-share-list" class="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="share-2" class="w-4 h-4"></i> Share / Copy JSON
+                        </button>
+                        <button id="btn-delete-list" class="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete List
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="setup-error"></div>
-  </div>
 
-  <!-- APP SCREEN -->
-  <div id="app-screen">
-    <div class="search-bar">
-      <input class="input-field" type="text" id="album-url-input" placeholder="Paste Spotify album link or URI…" />
-      <button class="btn" id="search-btn" onclick="lookupAlbum()">Look Up</button>
-    </div>
-    <div id="error-display"></div>
-    <div id="album-output"></div>
-  </div>
-</main>
+    <!-- Modal: Artist Profile Pic Upload -->
+    <input type="file" id="artist-pic-input" class="hidden" accept="image/*">
 
-<script>
-// ─── Config ───────────────────────────────────────────────────────────────────
-const REDIRECT_URI = window.location.href.split('?')[0].split('#')[0];
-document.getElementById('redirect-uri-display').textContent = REDIRECT_URI;
+    <script>
+        const STORAGE_KEY = 'prog_rank_data_v1';
+        const LIST_COLORS = ['bg-neutral-800', 'bg-red-900/40', 'bg-orange-900/40', 'bg-amber-900/40', 'bg-green-900/40', 'bg-emerald-900/40', 'bg-teal-900/40', 'bg-cyan-900/40', 'bg-sky-900/40', 'bg-blue-900/40', 'bg-indigo-900/40', 'bg-violet-900/40', 'bg-purple-900/40', 'bg-fuchsia-900/40', 'bg-pink-900/40', 'bg-rose-900/40'];
 
-let accessToken = null;
+        const generateId = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+            return 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        };
 
-// ─── PKCE Helpers ─────────────────────────────────────────────────────────────
-function generateRandomString(length) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const arr = crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(arr).map(b => chars[b % chars.length]).join('');
-}
+        const showToast = (message) => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'bg-neutral-800 border border-neutral-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 notification-toast pointer-events-auto';
+            toast.innerHTML = `<i data-lucide="info" class="w-5 h-5 text-purple-400"></i> <span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons({ root: toast });
+            setTimeout(() => toast.remove(), 3000);
+        };
 
-async function generateCodeChallenge(verifier) {
-  const enc = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', enc);
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
+        let state = {
+            mainListType: null, // 'albums' | 'songs'
+            library: [],
+            lists: [],
+            artists: {}, 
+            migratedToAbsolute: false, // FLAG FOR ABSOLUTE SCALING MIGRATION
+            
+            history: [], 
+            currentView: 'dashboard', 
+            activeListId: null,
+            activeAlbumId: null,
+            activeArtistName: null,
+            
+            viewMode: 'horizontal',
+            showMetrics: false,
+            zoomLevel: 1,
+            isReadOnly: false, 
+            globalSort: 'avg', // 'avg' | 'user'
+            calibrateGlobal: false, 
+            
+            isDragging: false,
+            draggedId: null,
+            dragStartX: 0,
+            isClickCandidate: false,
+            
+            modalOpen: false,
+            editMode: false,
+            editId: null,
+            tempItem: { title: '', artist: '', link: '', cover: '', remarks: '', songs: null },
+            originalItemForEdit: null,
+            
+            listModalOpen: false,
+            listOptionsOpen: false,
+            optionsListId: null,
+            deleteConfirmState: false,
+            draggedListIdx: null
+        };
 
-// ─── Auth ──────────────────────────────────────────────────────────────────────
-function getClientId() {
-  return localStorage.getItem('spotify_client_id') || '';
-}
+        const spotifyState = {
+            clientId: localStorage.getItem('spotify_client_id') || '',
+            accessToken: localStorage.getItem('spotify_access_token') || '',
+            tokenExpiry: localStorage.getItem('spotify_token_expiry') || 0
+        };
 
-async function startAuth() {
-  const clientId = document.getElementById('client-id-input').value.trim();
-  if (!clientId || clientId.length < 20) {
-    showSetupError('Please enter a valid Client ID.');
-    return;
-  }
-  localStorage.setItem('spotify_client_id', clientId);
+        // DOM Element References
+        const els = {
+            header: document.getElementById('header-container'),
+            mainContent: document.getElementById('main-content'),
+            searchResults: document.getElementById('global-search-results'),
+            setupModalOverlay: document.getElementById('setup-modal-overlay'),
+            modalOverlay: document.getElementById('modal-overlay'),
+            modalContent: document.getElementById('modal-content'),
+            modalTitle: document.getElementById('modal-title'),
+            btnCloseModal: document.getElementById('btn-close-modal'),
+            coverSection: document.getElementById('cover-section'),
+            coverTrigger: document.getElementById('cover-upload-trigger'),
+            fileInput: document.getElementById('file-input'),
+            inputCoverUrl: document.getElementById('input-cover-url'),
+            coverUrlContainer: document.getElementById('cover-url-container'),
+            coverPreviewContainer: document.getElementById('cover-preview-container'),
+            coverPreview: document.getElementById('cover-preview'),
+            coverPlaceholder: document.getElementById('cover-placeholder'),
+            coverLabelText: document.getElementById('cover-label-text'),
+            inputTitle: document.getElementById('input-title'),
+            inputArtist: document.getElementById('input-artist'),
+            artistSuggestions: document.getElementById('artist-suggestions'),
+            inputLink: document.getElementById('input-link'),
+            inputRemarks: document.getElementById('input-remarks'),
+            fieldArtist: document.getElementById('field-artist-container'),
+            fieldLink: document.getElementById('field-link-container'),
+            labelTitle: document.getElementById('label-title'),
+            btnSave: document.getElementById('btn-save'),
+            btnDelete: document.getElementById('btn-delete'),
+            searchSection: document.getElementById('library-search-section'),
+            inputSearchLib: document.getElementById('input-search-library'),
+            libraryResults: document.getElementById('library-results'),
+            listModalOverlay: document.getElementById('list-modal-overlay'),
+            btnCloseListModal: document.getElementById('btn-close-list-modal'),
+            inputListName: document.getElementById('input-list-name'),
+            inputImportJson: document.getElementById('input-import-json'),
+            btnCreateList: document.getElementById('btn-create-list'),
+            btnImportList: document.getElementById('btn-import-list'),
+            tabCreate: document.getElementById('tab-create'),
+            tabImport: document.getElementById('tab-import'),
+            viewCreateList: document.getElementById('view-create-list'),
+            viewImportList: document.getElementById('view-import-list'),
+            listModalHeading: document.getElementById('list-modal-heading'),
+            listOptionsOverlay: document.getElementById('list-options-modal-overlay'),
+            btnCloseOptionsModal: document.getElementById('btn-close-options-modal'),
+            inputRenameList: document.getElementById('input-rename-list'),
+            colorPickerContainer: document.getElementById('color-picker-container'),
+            btnDeleteList: document.getElementById('btn-delete-list'),
+            btnShareList: document.getElementById('btn-share-list'),
+            btnPinList: document.getElementById('btn-pin-list'),
+            artistPicInput: document.getElementById('artist-pic-input'),
+            settingsModalOverlay: document.getElementById('settings-modal-overlay'),
+            inputSpotifyClientId: document.getElementById('input-spotify-client-id'),
+            inputSpotifyAutofill: document.getElementById('input-spotify-autofill')
+        };
 
-  const verifier = generateRandomString(64);
-  const challenge = await generateCodeChallenge(verifier);
-  localStorage.setItem('pkce_verifier', verifier);
+        // --- Core Functions ---
 
-  const scopes = 'user-read-private user-read-email';
-  const params = new URLSearchParams({
-    client_id: clientId,
-    response_type: 'code',
-    redirect_uri: REDIRECT_URI,
-    scope: scopes,
-    code_challenge_method: 'S256',
-    code_challenge: challenge,
-  });
-  window.location.href = `https://accounts.spotify.com/authorize?${params}`;
-}
+        function init() {
+            const savedLegacy = localStorage.getItem('album_ranker_data_v5');
+            const saved = localStorage.getItem(STORAGE_KEY);
+            
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                state = { ...state, ...parsed };
+            } else if (savedLegacy) {
+                const parsed = JSON.parse(savedLegacy);
+                state.library = parsed.library || [];
+                state.lists = parsed.lists || [];
+                state.artists = parsed.artists || {};
+                state.mainListType = 'albums';
+                state.lists.forEach(l => l.type = 'albums');
+            }
 
-async function exchangeCodeForToken(code) {
-  const clientId = getClientId();
-  const verifier = localStorage.getItem('pkce_verifier');
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: REDIRECT_URI,
-    client_id: clientId,
-    code_verifier: verifier,
-  });
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error('Token exchange failed: ' + await res.text());
-  return res.json();
-}
+            // Migration to Absolute 0-10 Scaling
+            if (!state.migratedToAbsolute) {
+                state.library.forEach(l => {
+                    if (l.defaultSongs) l.defaultSongs.forEach(s => { s.score = (s.score / 10) || 5.0; });
+                });
+                state.lists.forEach(list => {
+                    list.items.forEach(i => {
+                        i.score = (i.score / 10) || 5.0;
+                        if (i.songs) i.songs.forEach(s => { s.score = (s.score / 10) || 5.0; });
+                    });
+                });
+                for (const a in state.artists) {
+                    if (state.artists[a].userScore) state.artists[a].userScore = (state.artists[a].userScore / 10) || 0;
+                }
+                state.migratedToAbsolute = true;
+                saveDataNoRender();
+            }
 
-function logout() {
-  localStorage.removeItem('spotify_access_token');
-  localStorage.removeItem('spotify_token_expiry');
-  localStorage.removeItem('pkce_verifier');
-  accessToken = null;
-  showSetupScreen();
-}
+            if (!state.mainListType) {
+                if (state.lists.length > 0 && state.lists[0].items.length > 0) {
+                    state.mainListType = 'albums';
+                    state.lists.forEach(l => l.type = 'albums');
+                } else {
+                    renderSetupModal();
+                }
+            }
 
-function showSetupError(msg) {
-  document.getElementById('setup-error').innerHTML = `<div class="error-box">${msg}</div>`;
-}
+            if (!state.lists.some(l => l.isMain)) {
+                if(state.mainListType) createDefaultMainList();
+            }
+            
+            checkSpotifyAuth();
+            setupEventListeners();
+            render();
+            renderColorPicker();
+        }
 
-// ─── Screen Management ─────────────────────────────────────────────────────────
-function showSetupScreen() {
-  document.getElementById('setup-screen').style.display = 'flex';
-  document.getElementById('app-screen').style.display = 'none';
-  document.getElementById('status-dot').className = 'dot';
-  document.getElementById('status-text').textContent = 'not connected';
-  document.getElementById('logout-btn').style.display = 'none';
-  const savedId = getClientId();
-  if (savedId) document.getElementById('client-id-input').value = savedId;
-}
+        function createDefaultMainList() {
+            state.lists.push({
+                id: generateId(),
+                name: state.mainListType === 'albums' ? "My Album Rankings" : "My Song Rankings",
+                items: [],
+                color: 'bg-neutral-800',
+                isMain: true,
+                isPinned: true,
+                type: state.mainListType
+            });
+            saveData();
+        }
 
-function showAppScreen() {
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'block';
-  document.getElementById('status-dot').className = 'dot live';
-  document.getElementById('status-text').textContent = 'connected';
-  document.getElementById('logout-btn').style.display = 'inline-block';
-}
+        function selectMainListType(type) {
+            state.mainListType = type;
+            els.setupModalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.setupModalOverlay.classList.add('hidden'), 200);
+            state.lists = [];
+            createDefaultMainList();
+            saveData();
+            render();
+        }
 
-// ─── API ───────────────────────────────────────────────────────────────────────
-async function spotifyFetch(endpoint) {
-  const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!res.ok) throw new Error(`Spotify API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
+        function renderSetupModal() {
+            els.setupModalOverlay.classList.remove('hidden');
+            setTimeout(() => els.setupModalOverlay.classList.remove('opacity-0'), 10);
+            lucide.createIcons({ root: els.setupModalOverlay });
+        }
 
-function extractAlbumId(input) {
-  input = input.trim();
-  // URI format: spotify:album:ID
-  const uriMatch = input.match(/spotify:album:([A-Za-z0-9]+)/);
-  if (uriMatch) return uriMatch[1];
-  // URL format: open.spotify.com/album/ID
-  const urlMatch = input.match(/spotify\.com\/album\/([A-Za-z0-9]+)/);
-  if (urlMatch) return urlMatch[1];
-  // Raw ID (22 chars alphanumeric)
-  if (/^[A-Za-z0-9]{22}$/.test(input)) return input;
-  return null;
-}
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                library: state.library,
+                lists: state.lists,
+                artists: state.artists,
+                mainListType: state.mainListType,
+                migratedToAbsolute: state.migratedToAbsolute
+            }));
+            render();
+        }
 
-async function lookupAlbum() {
-  const input = document.getElementById('album-url-input').value.trim();
-  const albumId = extractAlbumId(input);
-  const errEl = document.getElementById('error-display');
-  const outEl = document.getElementById('album-output');
+        function saveDataNoRender() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                library: state.library,
+                lists: state.lists,
+                artists: state.artists,
+                mainListType: state.mainListType,
+                migratedToAbsolute: state.migratedToAbsolute
+            }));
+        }
 
-  errEl.innerHTML = '';
-  if (!albumId) {
-    errEl.innerHTML = '<div class="error-box">Could not parse that link. Paste a Spotify album URL or URI.</div>';
-    return;
-  }
+        function renderColorPicker() {
+            els.colorPickerContainer.innerHTML = '';
+            LIST_COLORS.forEach(color => {
+                const btn = document.createElement('button');
+                btn.className = `w-8 h-8 rounded-full ${color} border-2 border-transparent hover:border-white transition-all`;
+                btn.onclick = () => updateListColor(color);
+                els.colorPickerContainer.appendChild(btn);
+            });
+        }
 
-  try {
-    // Step 1: verify token works
-    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Verifying token...</span></div>';
-    await spotifyFetch('/me');
+        function checkArtistMatch(itemArtistString, targetArtistName) {
+            if (!itemArtistString) return false;
+            const target = targetArtistName.toLowerCase().trim();
+            const artists = itemArtistString.split(',').map(a => a.trim().toLowerCase());
+            return artists.includes(target);
+        }
 
-    // Step 2: fetch album
-    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching album...</span></div>';
-    const album = await spotifyFetch('/albums/' + albumId);
+        function getArtistStats(artistName) {
+            const mainList = state.lists.find(l => l.isMain);
+            if (!mainList) return { avg: 0, count: 0 };
+            const artistItems = mainList.items.filter(i => checkArtistMatch(i.artist, artistName));
+            if (artistItems.length === 0) return { avg: 0, count: 0 };
+            
+            const total = artistItems.reduce((sum, item) => sum + parseFloat(item.score || 0), 0);
+            return {
+                avg: (total / artistItems.length).toFixed(1),
+                count: artistItems.length
+            };
+        }
 
-    // Step 3: fetch tracks
-    outEl.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Fetching tracks...</span></div>';
-    const tracksData = await spotifyFetch('/albums/' + albumId + '/tracks?limit=50');
+        function getArtistProfilePic(artistName) {
+            const artistData = state.artists[artistName];
+            if (artistData && artistData.profilePic) return artistData.profilePic;
+            const matches = state.library.filter(l => checkArtistMatch(l.artist, artistName) && l.cover);
+            if (matches.length > 0) return matches[0].cover;
+            return null;
+        }
 
-    renderAlbum(album, tracksData, []);
-  } catch(e) {
-    outEl.innerHTML = '';
-    errEl.innerHTML = '<div class="error-box">' + e.message + '</div>';
-  }
-}
+        // --- Spotify Integration ---
+        function openSettingsModal() {
+            els.inputSpotifyClientId.value = spotifyState.clientId;
+            els.settingsModalOverlay.classList.remove('hidden');
+            setTimeout(() => els.settingsModalOverlay.classList.remove('opacity-0'), 10);
+            lucide.createIcons({ root: els.settingsModalOverlay });
+        }
 
-// ─── Render ────────────────────────────────────────────────────────────────────
-function msToTime(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = String(totalSec % 60).padStart(2, '0');
-  return `${m}:${s}`;
-}
+        function closeSettingsModal() {
+            els.settingsModalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.settingsModalOverlay.classList.add('hidden'), 200);
+        }
 
-function totalDuration(tracks) {
-  const ms = tracks.reduce((a, t) => a + (t.duration_ms || 0), 0);
-  const totalMin = Math.floor(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+        function checkSpotifyAuth() {
+            const hash = window.location.hash;
+            if (hash.includes('access_token')) {
+                const params = new URLSearchParams(hash.substring(1));
+                const token = params.get('access_token');
+                const expiresIn = params.get('expires_in');
+                localStorage.setItem('spotify_access_token', token);
+                localStorage.setItem('spotify_token_expiry', Date.now() + (expiresIn * 1000));
+                window.location.hash = '';
+                spotifyState.accessToken = token;
+                spotifyState.tokenExpiry = Date.now() + (expiresIn * 1000);
+                showToast("Spotify connected successfully!");
+            } else if (spotifyState.accessToken && Date.now() > spotifyState.tokenExpiry) {
+                spotifyState.accessToken = '';
+                localStorage.removeItem('spotify_access_token');
+            }
+        }
 
-function avgPopularity(tracks) {
-  if (!tracks.length) return 0;
-  return Math.round(tracks.reduce((a,t) => a + (t.popularity||0), 0) / tracks.length);
-}
+        function authSpotify() {
+            const cid = els.inputSpotifyClientId.value.trim();
+            if (!cid) return showToast("Enter Client ID");
+            localStorage.setItem('spotify_client_id', cid);
+            const redirectUri = window.location.origin + window.location.pathname;
+            const url = `https://accounts.spotify.com/authorize?client_id=${cid}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+            window.location.href = url;
+        }
 
-function renderAlbum(album, tracksData, fullTracks) {
-  const out = document.getElementById('album-output');
-  const tracks = tracksData.items;
-  const coverUrl = album.images?.[0]?.url || '';
+        async function fetchSpotifyData() {
+            const urlStr = els.inputSpotifyAutofill.value.trim();
+            if (!urlStr) return showToast("Paste a Spotify link first!");
+            if (!spotifyState.accessToken) return showToast("Please connect to Spotify in Settings first!");
+            
+            try {
+                const btn = document.querySelector('#spotify-autofill-section button');
+                btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>';
+                lucide.createIcons({ root: btn.parentNode });
 
-  let html = `<div class="fade-in">`;
+                const urlObj = new URL(urlStr);
+                const pathParts = urlObj.pathname.split('/');
+                const type = pathParts[1]; 
+                const id = pathParts[2];
+                
+                if (!['album', 'track'].includes(type) || !id) throw new Error("Invalid Link");
 
-  // ── Hero ──
-  html += `
-  <div class="album-hero">
-    <div class="album-hero-bg" style="background-image:url('${coverUrl}')"></div>
-    ${coverUrl ? `<img class="album-art" src="${coverUrl}" alt="${escape(album.name)}">` : ''}
-    <div class="album-meta">
-      <div class="album-type">${album.album_type?.toUpperCase() || 'ALBUM'}</div>
-      <div class="album-name">${album.name}</div>
-      <div class="album-artist">
-        by ${album.artists?.map(a => `<a href="${a.external_urls?.spotify}" target="_blank">${a.name}</a>`).join(', ')}
-      </div>
-      <div class="meta-pills">
-        <span class="pill">${album.release_date}</span>
-        <span class="pill">${tracks.length} track${tracks.length !== 1 ? 's' : ''}</span>
-        ${album.explicit ? '<span class="pill green">EXPLICIT</span>' : ''}
-        ${album.total_tracks > tracks.length ? `<span class="pill">${album.total_tracks} total (multi-disc)</span>` : ''}
-      </div>
-      <a class="open-spotify" href="${album.external_urls?.spotify}" target="_blank">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-        Open in Spotify
-      </a>
-    </div>
-  </div>`;
+                const res = await fetch(`https://api.spotify.com/v1/${type}s/${id}`, {
+                    headers: { 'Authorization': `Bearer ${spotifyState.accessToken}` }
+                });
+                
+                if (res.status === 401) return showToast("Spotify token expired. Please reconnect in settings.");
+                const data = await res.json();
+                
+                if (type === 'album') {
+                    els.inputTitle.value = data.name;
+                    els.inputArtist.value = data.artists.map(a => a.name).join(', ');
+                    if (data.images && data.images.length > 0) {
+                        state.tempItem.cover = data.images[0].url;
+                        els.inputCoverUrl.value = data.images[0].url;
+                        els.coverPreview.src = data.images[0].url;
+                        els.coverPreviewContainer.classList.remove('hidden');
+                        els.coverPlaceholder.classList.add('hidden');
+                    }
+                    els.inputLink.value = data.external_urls.spotify;
+                    
+                    if (data.tracks && data.tracks.items) {
+                        state.tempItem.songs = data.tracks.items.map(t => ({
+                            id: generateId(),
+                            title: t.name,
+                            artist: t.artists.map(a => a.name).join(', '),
+                            score: 5.0,
+                            remarks: '',
+                            link: t.external_urls.spotify
+                        }));
+                        showToast(`Auto-filled details & ${data.tracks.items.length} songs!`);
+                    }
+                } else if (type === 'track') {
+                    els.inputTitle.value = data.name;
+                    els.inputArtist.value = data.artists.map(a => a.name).join(', ');
+                    if (data.album && data.album.images && data.album.images.length > 0) {
+                        state.tempItem.cover = data.album.images[0].url;
+                        els.inputCoverUrl.value = data.album.images[0].url;
+                        els.coverPreview.src = data.album.images[0].url;
+                        els.coverPreviewContainer.classList.remove('hidden');
+                        els.coverPlaceholder.classList.add('hidden');
+                    }
+                    els.inputLink.value = data.external_urls.spotify;
+                    showToast("Track details fetched!");
+                }
 
-  // ── Stats ──
-  html += `
-  <div class="section">
-    <div class="section-header"><div class="section-title">At a Glance</div></div>
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-label">Release Date</div>
-        <div class="stat-value" style="font-size:1rem">${album.release_date}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Tracks</div>
-        <div class="stat-value green">${album.total_tracks}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Duration</div>
-        <div class="stat-value" style="font-size:1.1rem">${totalDuration(fullTracks.length ? fullTracks : tracks)}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Album ID</div>
-        <div class="stat-value" style="font-size:0.65rem;letter-spacing:0.02em;word-break:break-all">${album.id}</div>
-      </div>
-    </div>
-  </div>`;
+                state.tempItem.title = els.inputTitle.value;
+                state.tempItem.artist = els.inputArtist.value;
+                state.tempItem.link = els.inputLink.value;
+                
+                btn.innerHTML = 'Fetch';
+                els.inputSpotifyAutofill.value = '';
+                
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to fetch Spotify data.");
+                const btn = document.querySelector('#spotify-autofill-section button');
+                btn.innerHTML = 'Fetch';
+            }
+        }
 
-  // ── Tracks ──
-  html += `
-  <div class="section">
-    <div class="section-header">
-      <div class="section-title">Tracklist</div>
-      <div class="section-count">${tracks.length} tracks</div>
-    </div>
-    <div class="track-list">`;
+        // --- Navigation ---
+        function navigateTo(view, params = {}) {
+            state.history.push({
+                view: state.currentView,
+                activeListId: state.activeListId,
+                activeAlbumId: state.activeAlbumId,
+                activeArtistName: state.activeArtistName,
+                isReadOnly: state.isReadOnly,
+                zoomLevel: state.zoomLevel,
+                calibrateGlobal: state.calibrateGlobal
+            });
 
-  tracks.forEach((t, i) => {
-    const full = fullTracks.find(f => f?.id === t.id);
-    const pop = full?.popularity ?? null;
-    html += `
-    <div class="track-row">
-      <div class="track-num">${t.track_number}</div>
-      <div class="track-info">
-        <div class="track-name">${t.name}</div>
-        <div class="track-artists">${t.artists?.map(a=>a.name).join(', ')}</div>
-        ${pop !== null ? `<div class="popularity-bar"><div class="popularity-fill" style="width:${pop}%"></div></div>` : ''}
-      </div>
-      ${t.explicit ? '<span class="track-explicit">E</span>' : '<span></span>'}
-      <div class="track-duration">${msToTime(t.duration_ms)}</div>
-    </div>`;
-  });
+            state.currentView = view;
+            state.activeListId = params.listId || null;
+            state.activeAlbumId = params.albumId || null;
+            state.activeArtistName = params.artistName || null;
+            state.isReadOnly = params.readOnly || false;
+            state.zoomLevel = params.zoom || 1;
+            
+            els.searchResults.classList.add('hidden');
+            render();
+        }
 
-  html += `</div></div>`;
+        function goBack() {
+            if (state.history.length > 0) {
+                const prev = state.history.pop();
+                state.currentView = prev.view;
+                state.activeListId = prev.activeListId;
+                state.activeAlbumId = prev.activeAlbumId;
+                state.activeArtistName = prev.activeArtistName;
+                state.isReadOnly = prev.isReadOnly;
+                state.zoomLevel = prev.zoomLevel;
+                state.calibrateGlobal = prev.calibrateGlobal;
+                render();
+            } else {
+                goHome(); 
+            }
+        }
 
-  // ── Artists ──
-  if (album.artists?.length) {
-    html += `
-    <div class="section">
-      <div class="section-header"><div class="section-title">Artists</div></div>
-      <div class="artist-grid">`;
-    album.artists.forEach(a => {
-      html += `
-      <a class="artist-chip" href="${a.external_urls?.spotify}" target="_blank">
-        <div class="artist-avatar" style="background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--muted)">♪</div>
-        <span class="artist-chip-name">${a.name}</span>
-      </a>`;
-    });
-    html += `</div></div>`;
-  }
+        function goHome() {
+            state.history = []; 
+            state.currentView = 'dashboard';
+            state.activeListId = null;
+            state.activeAlbumId = null;
+            state.activeArtistName = null;
+            state.isReadOnly = false;
+            els.searchResults.classList.add('hidden');
+            render();
+        }
 
-  // ── Cover Art Sizes ──
-  if (album.images?.length) {
-    html += `
-    <div class="section">
-      <div class="section-header"><div class="section-title">Cover Art</div><div class="section-count">${album.images.length} sizes</div></div>
-      <div class="img-grid">`;
-    album.images.forEach(img => {
-      html += `
-      <div class="img-grid-item">
-        <img src="${img.url}" alt="cover art" loading="lazy">
-        <div class="img-dim">${img.width}×${img.height}</div>
-      </div>`;
-    });
-    html += `</div></div>`;
-  }
+        function goToList(listId) { navigateTo('list', { listId }); }
 
-  // ── Copyrights ──
-  if (album.copyrights?.length) {
-    html += `
-    <div class="section">
-      <div class="section-header"><div class="section-title">Copyrights</div></div>
-      <div class="label-list">`;
-    album.copyrights.forEach(c => {
-      html += `<div class="label-item"><span style="color:var(--text)">${c.type === 'C' ? '©' : '℗'}</span> ${c.text}</div>`;
-    });
-    html += `</div></div>`;
-  }
+        function goToAlbum(albumId, listId = null) {
+            const list = state.lists.find(l => l.id === (listId || state.activeListId));
+            if (list && list.type === 'songs') {
+                const song = list.items.find(i => i.id === albumId);
+                if(song) openModal(song);
+                return;
+            }
+            navigateTo('album', { albumId, listId: listId || state.activeListId });
+        }
 
-  // ── Genres ──
-  if (album.genres?.length) {
-    html += `
-    <div class="section">
-      <div class="section-header"><div class="section-title">Genres</div></div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">
-        ${album.genres.map(g => `<span class="pill">${g}</span>`).join('')}
-      </div>
-    </div>`;
-  }
+        function goToArtistProfile(artistName) { navigateTo('artistProfile', { artistName }); }
 
-  // ── Raw JSON ──
-  html += `
-  <div class="section">
-    <div class="section-header"><div class="section-title">Raw API Response</div></div>
-    <button class="json-toggle" onclick="toggleJson(this)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
-      Show raw JSON
-    </button>
-    <pre class="json-block" id="raw-json">${JSON.stringify(album, null, 2)}</pre>
-  </div>`;
+        function goToArtistAutoList(type) {
+            if (state.mainListType === 'songs' && type === 'albums') return;
+            navigateTo('artistAutoList', { listId: 'auto-' + type, readOnly: true, artistName: state.activeArtistName });
+        }
 
-  html += `</div>`;
-  out.innerHTML = html;
-}
+        function goToComparison() { navigateTo('comparison', { artistName: state.activeArtistName }); }
 
-function toggleJson(btn) {
-  const block = document.getElementById('raw-json');
-  const showing = block.style.display === 'block';
-  block.style.display = showing ? 'none' : 'block';
-  btn.innerHTML = showing
-    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg> Show raw JSON'
-    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg> Hide raw JSON';
-}
+        function goToGlobalArtistRankings() { navigateTo('globalArtistRankings'); }
 
-// ─── Enter key support ────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('album-url-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') lookupAlbum();
-  });
-  document.getElementById('client-id-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') startAuth();
-  });
-});
+        // --- Data Helpers ---
+        function getActiveList() {
+            if (state.activeListId && state.activeListId.startsWith('auto-')) {
+                const mainList = state.lists.find(l => l.isMain) || state.lists[0];
+                const artistName = state.activeArtistName;
+                
+                if (state.activeListId === 'auto-albums') {
+                    const artistAlbums = mainList.items.filter(i => checkArtistMatch(i.artist, artistName));
+                    return { name: `${artistName} Albums (Main)`, items: artistAlbums, isAuto: true, type: 'albums' };
+                } else if (state.activeListId === 'auto-songs') {
+                    if (state.mainListType === 'albums') {
+                        const artistAlbums = mainList.items.filter(i => checkArtistMatch(i.artist, artistName));
+                        let allSongs = [];
+                        artistAlbums.forEach(alb => {
+                            if(alb.songs) allSongs = allSongs.concat(alb.songs.map(s => ({...s, cover: alb.cover, artist: artistName})));
+                        });
+                        return { name: `${artistName} Songs (Main)`, items: allSongs, isAuto: true, type: 'songs' };
+                    } else {
+                         const artistSongs = mainList.items.filter(i => checkArtistMatch(i.artist, artistName));
+                         return { name: `${artistName} Songs (Main)`, items: artistSongs, isAuto: true, type: 'songs' };
+                    }
+                }
+            }
+            return state.lists.find(l => l.id === state.activeListId);
+        }
 
-// ─── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
-  // Check for PKCE auth code in URL query params (after OAuth redirect)
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  const error = urlParams.get('error');
+        function getActiveAlbum() {
+            const list = getActiveList();
+            if (!list) return null;
+            if (list.type === 'songs' || state.activeListId === 'auto-songs') return null;
+            return list.items.find(a => a.id === state.activeAlbumId);
+        }
 
-  if (error) {
-    history.replaceState(null, '', window.location.pathname);
-    showSetupScreen();
-    showSetupError('Spotify authorization was denied.');
-    return;
-  }
+        function getCurrentItems() {
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                return album ? album.songs : [];
+            } else if (state.currentView === 'list' || state.currentView === 'artistAutoList') {
+                const list = getActiveList();
+                return list ? list.items : [];
+            }
+            return [];
+        }
 
-  if (code) {
-    history.replaceState(null, '', window.location.pathname);
-    try {
-      const data = await exchangeCodeForToken(code);
-      accessToken = data.access_token;
-      localStorage.setItem('spotify_access_token', data.access_token);
-      const expiry = Date.now() + (data.expires_in || 3600) * 1000;
-      localStorage.setItem('spotify_token_expiry', expiry);
-      showAppScreen();
-    } catch(e) {
-      showSetupScreen();
-      showSetupError('Failed to get token: ' + e.message);
-    }
-    return;
-  }
+        function getStats() {
+            const list = getCurrentItems();
+            let min = 0; let max = 10;
+            if (list && list.length > 0) {
+                const scores = list.map(a => parseFloat(a.score) || 0);
+                min = Math.min(0, ...scores);
+                max = Math.max(10, ...scores);
+            }
+            return { min, max, range: max - min || 10 };
+        }
 
-  // Check for stored valid token
-  const stored = localStorage.getItem('spotify_access_token');
-  const expiry = parseInt(localStorage.getItem('spotify_token_expiry') || '0');
-  if (stored && Date.now() < expiry) {
-    accessToken = stored;
-    showAppScreen();
-    return;
-  }
+        function getMetric(score) {
+            return parseFloat(score).toFixed(1);
+        }
 
-  showSetupScreen();
-}
+        function getDynamicSize() {
+            const { range } = getStats();
+            const baseSize = 56;
+            const scaleFactor = Math.sqrt(10 / Math.max(10, range));
+            return Math.max(24, baseSize * scaleFactor);
+        }
 
-init();
-</script>
+        // --- View Actions ---
+        function toggleMetrics() { state.showMetrics = !state.showMetrics; render(); }
+        function toggleCalibration() { state.calibrateGlobal = !state.calibrateGlobal; render(); }
+        function setViewMode(mode) { state.viewMode = mode; render(); }
+        function zoomIn() { if (state.zoomLevel < 5) { state.zoomLevel += 0.5; render(); } }
+        function zoomOut() { if (state.zoomLevel > 1) { state.zoomLevel -= 0.5; render(); } }
+        function setGlobalSort(type) { state.globalSort = type; render(); }
+
+        function deleteArtist(artistName) {
+            const safeName = artistName.replace(/'/g, "\\'");
+            if(confirm(`Are you sure you want to delete ${artistName}? This will not remove their items from lists.`)) {
+                delete state.artists[artistName];
+                saveData();
+                if(state.currentView === 'artistProfile' && state.activeArtistName === artistName) goBack();
+                showToast("Artist profile data deleted.");
+            }
+        }
+
+        function openDiscographyList() {
+            const artistName = state.activeArtistName;
+            const listName = `Discography: ${artistName}`;
+            let list = state.lists.find(l => l.name === listName);
+
+            if (!list) {
+                const artistItems = state.library.filter(a => checkArtistMatch(a.artist, artistName));
+                if (artistItems.length === 0) return showToast("No items found for this artist in library.");
+                
+                list = {
+                    id: generateId(),
+                    name: listName,
+                    color: 'bg-neutral-800',
+                    type: state.mainListType || 'albums',
+                    items: artistItems.map(libItem => ({
+                        id: generateId(),
+                        score: 5.0,
+                        color: 'from-gray-700 to-gray-900',
+                        title: libItem.title,
+                        artist: libItem.artist,
+                        cover: libItem.cover,
+                        link: libItem.link,
+                        songs: libItem.defaultSongs ? JSON.parse(JSON.stringify(libItem.defaultSongs)) : []
+                    }))
+                };
+                state.lists.push(list);
+                saveData();
+                showToast(`Created new list: ${listName}`);
+            } else {
+                const artistItems = state.library.filter(a => checkArtistMatch(a.artist, artistName));
+                let addedCount = 0;
+                artistItems.forEach(libItem => {
+                    const exists = list.items.find(i => i.title.toLowerCase() === libItem.title.toLowerCase());
+                    if (!exists) {
+                        list.items.push({
+                            id: generateId(),
+                            score: 5.0,
+                            color: 'from-gray-700 to-gray-900',
+                            title: libItem.title,
+                            artist: libItem.artist,
+                            cover: libItem.cover,
+                            link: libItem.link,
+                            songs: libItem.defaultSongs ? JSON.parse(JSON.stringify(libItem.defaultSongs)) : []
+                        });
+                        addedCount++;
+                    }
+                });
+                if(addedCount > 0) {
+                    saveData();
+                    showToast(`Added ${addedCount} new items to list.`);
+                }
+            }
+            goToList(list.id);
+        }
+
+        // --- List Modal Functions ---
+        function openListModal() {
+            setListModalTab('create');
+            els.listModalOverlay.classList.remove('hidden');
+            setTimeout(() => els.listModalOverlay.classList.remove('opacity-0'), 10);
+        }
+
+        function setListModalTab(tab) {
+            if (tab === 'create') {
+                els.tabCreate.className = 'text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5';
+                els.tabImport.className = 'text-sm font-bold text-neutral-500 hover:text-white pb-2';
+                els.viewCreateList.classList.remove('hidden');
+                els.viewImportList.classList.add('hidden');
+                els.listModalHeading.innerText = 'Create New List';
+                els.inputListName.value = '';
+                els.inputListName.focus();
+                const radios = document.getElementsByName('new-list-type');
+                for(let r of radios) if (r.value === (state.mainListType || 'albums')) r.checked = true;
+            } else {
+                els.tabImport.className = 'text-sm font-bold text-white border-b-2 border-purple-500 pb-2 -mb-2.5';
+                els.tabCreate.className = 'text-sm font-bold text-neutral-500 hover:text-white pb-2';
+                els.viewImportList.classList.remove('hidden');
+                els.viewCreateList.classList.add('hidden');
+                els.listModalHeading.innerText = 'Import List';
+                els.inputImportJson.value = '';
+                els.inputImportJson.focus();
+            }
+        }
+
+        function createNewList() {
+            const name = els.inputListName.value.trim();
+            if (!name) return;
+            const typeRadio = document.querySelector('input[name="new-list-type"]:checked');
+            state.lists.push({ id: generateId(), name: name, items: [], color: 'bg-neutral-800', type: typeRadio ? typeRadio.value : 'albums' });
+            saveData();
+            els.listModalOverlay.classList.add('hidden');
+        }
+
+        function importList() {
+            try {
+                const json = els.inputImportJson.value.trim();
+                if(!json) return;
+                const data = JSON.parse(json);
+                if (!data.items || !Array.isArray(data.items)) throw new Error("Invalid Format");
+
+                let baseName = data.name || "Imported List";
+                let newName = baseName;
+                let counter = 1;
+                while(state.lists.find(l => l.name === newName)) { counter++; newName = `${baseName} ${counter}`; }
+
+                const newItems = data.items.map(item => ({
+                    ...item,
+                    id: generateId(),
+                    songs: (item.songs || []).map(s => ({ ...s, id: generateId() }))
+                }));
+
+                newItems.forEach(item => addToLibrary(item));
+                state.lists.push({ id: generateId(), name: newName, color: data.color || 'bg-neutral-800', items: newItems, type: data.type || 'albums' });
+                saveData();
+                els.listModalOverlay.classList.add('hidden');
+                showToast(`Imported "${newName}" successfully!`);
+            } catch (e) { alert("Invalid JSON format."); }
+        }
+
+        // --- Modals & CRUD ---
+        function openModal(item = null) {
+            state.modalOpen = true;
+            state.editMode = !!item;
+            state.editId = item ? item.id : null;
+            
+            if (item) {
+                state.tempItem = { ...item, remarks: item.remarks || '', songs: item.songs || [] };
+                state.originalItemForEdit = { ...item };
+            } else {
+                state.tempItem = { title: '', artist: '', link: '', cover: '', remarks: '', songs: null };
+                state.originalItemForEdit = null;
+            }
+            updateModalUI();
+            els.modalOverlay.classList.remove('hidden');
+            setTimeout(() => els.modalOverlay.classList.remove('opacity-0'), 10);
+        }
+
+        function closeModal() {
+            state.modalOpen = false;
+            els.modalOverlay.classList.add('opacity-0');
+            setTimeout(() => els.modalOverlay.classList.add('hidden'), 200);
+            els.artistSuggestions.classList.add('hidden');
+            els.inputSpotifyAutofill.value = '';
+        }
+
+        function updateModalUI() {
+            const list = getActiveList();
+            const listType = list ? list.type : 'albums';
+            const isSongInAlbumView = state.currentView === 'album'; 
+            const isSongModeList = listType === 'songs';
+
+            if (isSongInAlbumView || isSongModeList) {
+                els.modalTitle.innerText = state.editMode ? 'Edit Song' : 'Add Song';
+                els.labelTitle.innerHTML = 'Song Title <span class="text-red-500">*</span>';
+                els.inputTitle.placeholder = "e.g. Reckoner";
+            } else {
+                els.modalTitle.innerText = state.editMode ? 'Edit Album' : 'Add Album';
+                els.labelTitle.innerHTML = 'Album Title <span class="text-red-500">*</span>';
+                els.inputTitle.placeholder = "e.g. In Rainbows";
+            }
+            
+            if (state.isReadOnly) els.modalTitle.innerText = 'View Details';
+
+            els.searchSection.classList.toggle('hidden', state.editMode || isSongInAlbumView || state.isReadOnly);
+            els.coverSection.classList.toggle('hidden', isSongInAlbumView);
+            els.coverLabelText.innerText = isSongModeList ? "Cover Art (Optional)" : "Cover Art *";
+            els.fieldArtist.classList.toggle('hidden', isSongInAlbumView);
+            
+            els.inputTitle.value = state.tempItem.title || '';
+            els.inputArtist.value = state.tempItem.artist || '';
+            els.inputLink.value = state.tempItem.link || '';
+            els.inputRemarks.value = state.tempItem.remarks || '';
+            
+            const isBase64 = state.tempItem.cover && state.tempItem.cover.startsWith('data:');
+            els.inputCoverUrl.value = isBase64 ? '' : (state.tempItem.cover || '');
+
+            if (state.tempItem.cover && !isSongInAlbumView) {
+                els.coverPreview.src = state.tempItem.cover;
+                els.coverPreviewContainer.classList.remove('hidden');
+                els.coverPlaceholder.classList.add('hidden');
+            } else {
+                els.coverPreviewContainer.classList.add('hidden');
+                els.coverPlaceholder.classList.remove('hidden');
+            }
+
+            if (state.isReadOnly) {
+                els.btnSave.classList.add('hidden');
+                els.btnDelete.classList.add('hidden');
+                ['inputTitle', 'inputArtist', 'inputRemarks', 'inputLink'].forEach(k => els[k].disabled = true);
+            } else {
+                els.btnSave.classList.remove('hidden');
+                els.btnDelete.classList.toggle('hidden', !state.editMode);
+                ['inputTitle', 'inputArtist', 'inputRemarks', 'inputLink'].forEach(k => els[k].disabled = false);
+            }
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    state.tempItem.cover = reader.result;
+                    els.inputCoverUrl.value = '';
+                    updateModalUI();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveItem() {
+            const list = getActiveList();
+            const listType = list ? list.type : 'albums';
+            const isSongInAlbumView = state.currentView === 'album';
+
+            if (!state.tempItem.title) return showToast("Title is required!");
+            if (!isSongInAlbumView && !state.isReadOnly && !state.tempItem.artist) return showToast("Artist is required!");
+            
+            const urlValue = els.inputCoverUrl.value.trim();
+            if (urlValue) state.tempItem.cover = urlValue;
+            
+            if (!isSongInAlbumView && !state.editMode && !state.tempItem.cover && listType === 'albums') {
+                return showToast("Cover Image is required for Albums!");
+            }
+
+            if (isSongInAlbumView) {
+                const album = getActiveAlbum();
+                if (state.editMode) {
+                    album.songs = album.songs.map(s => s.id === state.editId ? { ...s, title: state.tempItem.title, remarks: state.tempItem.remarks, link: state.tempItem.link } : s);
+                } else {
+                    album.songs.push({ id: generateId(), title: state.tempItem.title, score: 5.0, remarks: state.tempItem.remarks, link: state.tempItem.link });
+                }
+            } else {
+                if (state.editMode) {
+                    list.items = list.items.map(i => i.id === state.editId ? { ...i, ...state.tempItem } : i);
+                    if (state.originalItemForEdit) {
+                        const orig = state.originalItemForEdit;
+                        const curr = state.tempItem;
+                        if (orig.title !== curr.title || orig.artist !== curr.artist || orig.cover !== curr.cover) {
+                            updateLibraryEntry(orig.title, orig.artist, curr.title, curr.artist, curr.cover, curr.link);
+                        }
+                    }
+                } else {
+                    const randColor = ['purple', 'blue', 'green', 'pink', 'orange'][Math.floor(Math.random() * 5)];
+                    const newItem = {
+                        id: generateId(),
+                        score: 5.0,
+                        color: `from-${randColor}-500 to-gray-700`,
+                        songs: state.tempItem.songs || [],
+                        ...state.tempItem
+                    };
+                    list.items.push(newItem);
+                    addToLibrary(newItem);
+                }
+            }
+            saveData();
+            closeModal();
+        }
+
+        function deleteItem(id) {
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                album.songs = album.songs.filter(s => s.id !== id);
+            } else {
+                const list = getActiveList();
+                list.items = list.items.filter(i => i.id !== id);
+            }
+            saveData();
+        }
+
+        function updateLibraryEntry(oldTitle, oldArtist, newTitle, newArtist, newCover, newLink) {
+            const entry = state.library.find(l => l.title.toLowerCase() === oldTitle.toLowerCase() && l.artist.toLowerCase() === oldArtist.toLowerCase());
+            if (entry) {
+                entry.title = newTitle; entry.artist = newArtist;
+                if (newCover) entry.cover = newCover;
+                if (newLink) entry.link = newLink;
+            } else {
+                addToLibrary({ title: newTitle, artist: newArtist, cover: newCover, link: newLink });
+            }
+        }
+
+        function addToLibrary(item) {
+            const exists = state.library.some(l => l.title.toLowerCase() === item.title.toLowerCase() && l.artist.toLowerCase() === item.artist.toLowerCase());
+            if (!exists) {
+                state.library.push({
+                    id: generateId(),
+                    title: item.title,
+                    artist: item.artist,
+                    cover: item.cover,
+                    link: item.link,
+                    defaultSongs: item.songs ? JSON.parse(JSON.stringify(item.songs)) : []
+                });
+            }
+        }
+
+        function handleArtistPicUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (!state.artists[state.activeArtistName]) state.artists[state.activeArtistName] = { userScore: 0 };
+                state.artists[state.activeArtistName].profilePic = reader.result;
+                saveData();
+                renderArtistProfile();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateArtistUserScore(val) {
+            if (!state.artists[state.activeArtistName]) state.artists[state.activeArtistName] = { userScore: 0 };
+            const numVal = parseFloat(val);
+            state.artists[state.activeArtistName].userScore = numVal;
+            const display = document.getElementById('user-score-display');
+            const slider = document.getElementById('artist-score-slider');
+            const input = document.getElementById('artist-score-input');
+            if(display) display.innerText = numVal;
+            if(slider && document.activeElement !== slider) slider.value = numVal;
+            if(input && document.activeElement !== input) input.value = numVal;
+            saveDataNoRender();
+        }
+
+        // --- Renderers ---
+        function render() {
+            renderHeader();
+            if (state.currentView === 'dashboard') renderDashboard();
+            else if (state.currentView === 'artistProfile') renderArtistProfile();
+            else if (state.currentView === 'globalArtistRankings') renderGlobalArtistRankings();
+            else if (state.currentView === 'comparison') renderComparison();
+            else renderMainArea();
+            lucide.createIcons({ root: document.body });
+        }
+
+        function renderHeader() {
+            const isDash = state.currentView === 'dashboard';
+            const isProfile = state.currentView === 'artistProfile';
+            const isGlobal = state.currentView === 'globalArtistRankings';
+            const isComparison = state.currentView === 'comparison';
+            
+            let title = 'Prog Rank'; let subtitle = '';
+            
+            if (!isDash) {
+                if (isProfile) { title = state.activeArtistName; subtitle = 'Artist Profile'; }
+                else if (isGlobal) { title = 'Global Rankings'; subtitle = 'All Artists'; }
+                else if (isComparison) { title = 'Comparison'; subtitle = state.activeArtistName; }
+                else if (state.currentView === 'list' || state.currentView === 'artistAutoList') {
+                    const list = getActiveList();
+                    title = list ? list.name : 'List';
+                    subtitle = list ? (list.isAuto ? 'Auto-Ranked' : (list.type === 'songs' ? 'Song Ranking' : 'Album Ranking')) : '';
+                } else if (state.currentView === 'album') {
+                    const alb = getActiveAlbum();
+                    title = alb ? alb.title : 'Album';
+                    subtitle = 'Song Ranking';
+                }
+            }
+
+            const backBtn = !isDash ? `<button onclick="goBack()" class="bg-neutral-800 p-2 rounded-lg hover:bg-neutral-700 transition-colors mr-2"><i data-lucide="arrow-left" class="w-5 h-5 text-white"></i></button>` : '';
+            const homeBtn = !isDash ? `<button onclick="goHome()" class="bg-neutral-800 p-2 rounded-lg hover:bg-neutral-700 transition-colors mr-4"><i data-lucide="home" class="w-5 h-5 text-white"></i></button>` : '';
+            
+            const zoomControls = (state.viewMode === 'horizontal' && !isDash && !isProfile && !isGlobal && !isComparison) ? `
+                <div class="flex bg-neutral-800 rounded-lg p-1 mr-2 hidden md:flex">
+                    <button onclick="zoomOut()" class="p-1.5 hover:text-white text-neutral-400"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                    <span class="px-2 text-xs flex items-center text-neutral-500 font-mono">${state.zoomLevel}x</span>
+                    <button onclick="zoomIn()" class="p-1.5 hover:text-white text-neutral-400"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                </div>` : '';
+
+            const rightActions = isDash ? `
+                <button onclick="goToGlobalArtistRankings()" class="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white" title="All Artist Rankings"><i data-lucide="trophy" class="w-5 h-5"></i></button>
+                <button onclick="openSettingsModal()" class="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white mr-2" title="Settings / Spotify"><i data-lucide="settings" class="w-5 h-5"></i></button>
+                <button onclick="openListModal()" class="flex items-center gap-2 bg-white text-neutral-900 px-4 py-2 rounded-full text-sm font-bold hover:bg-neutral-200 transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New List</button>
+            ` : (isProfile || isGlobal || isComparison) ? '' : `
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMetrics()" class="hidden md:block px-3 py-1.5 rounded text-sm font-medium ${state.showMetrics ? 'bg-purple-600/20 text-purple-400' : 'text-neutral-400 hover:text-white'}">${state.showMetrics ? 'Metrics: ON' : 'Metrics'}</button>
+                    ${zoomControls}
+                    <div class="flex bg-neutral-800 rounded-lg p-1">
+                        <button onclick="setViewMode('horizontal')" class="p-1.5 rounded ${state.viewMode === 'horizontal' ? 'bg-neutral-700 text-white' : 'text-neutral-500'}"><i data-lucide="columns" class="w-4 h-4"></i></button>
+                        <button onclick="setViewMode('vertical')" class="p-1.5 rounded ${state.viewMode === 'vertical' ? 'bg-neutral-700 text-white' : 'text-neutral-500'}"><i data-lucide="layout-list" class="w-4 h-4"></i></button>
+                    </div>
+                    ${!state.isReadOnly ? `<button onclick="openModal()" class="flex items-center gap-2 bg-white text-neutral-900 px-3 py-2 rounded-full text-sm font-bold hover:bg-neutral-200 transition-colors ml-2"><i data-lucide="plus" class="w-4 h-4"></i> Add</button>` : ''}
+                </div>
+            `;
+
+            els.header.innerHTML = `
+                <div class="flex items-center gap-2">
+                    ${backBtn} ${homeBtn}
+                    <div class="flex flex-col overflow-hidden">
+                        <h1 class="text-xl font-bold tracking-tight text-white truncate">${title}</h1>
+                        ${subtitle ? `<span class="text-xs text-neutral-400 font-medium tracking-wider uppercase">${subtitle}</span>` : ''}
+                    </div>
+                </div>
+                <div class="relative w-full max-w-md mx-4 hidden md:block">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500"></i>
+                    <input type="text" id="dashboard-search" class="w-full bg-neutral-800 border-transparent focus:border-purple-500 focus:ring-0 rounded-full pl-10 pr-4 py-2 text-white placeholder-neutral-500 text-sm transition-all shadow-sm focus:shadow-md" placeholder="Search...">
+                </div>
+                <div class="flex items-center gap-2">${rightActions}</div>
+            `;
+
+            const sInput = document.getElementById('dashboard-search');
+            if(sInput) {
+                sInput.addEventListener('input', handleGlobalSearch);
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('#global-search-results') && !e.target.closest('#dashboard-search')) els.searchResults.classList.add('hidden');
+                });
+            }
+        }
+
+        function renderDashboard() {
+            els.mainContent.innerHTML = '';
+            const container = document.createElement('div');
+            container.className = 'p-4 md:p-8 max-w-6xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+            
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20';
+            const sortedLists = [...state.lists].sort((a, b) => (b.isPinned === a.isPinned) ? 0 : b.isPinned ? 1 : -1);
+
+            sortedLists.forEach((list) => {
+                const card = document.createElement('div');
+                card.draggable = true;
+                card.className = `${list.color || 'bg-neutral-800'} border ${list.isPinned ? 'border-purple-500 shadow-purple-500/20' : 'border-neutral-700/50'} rounded-2xl p-6 hover:border-white/50 transition-all cursor-pointer group relative overflow-hidden shadow-lg select-none`;
+                
+                card.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed='move'; state.draggedListIdx = state.lists.indexOf(list); });
+                card.addEventListener('dragover', (e) => e.preventDefault());
+                card.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const dropIdx = state.lists.indexOf(list);
+                    if(state.draggedListIdx !== null && state.draggedListIdx !== dropIdx) {
+                        const item = state.lists[state.draggedListIdx];
+                        state.lists.splice(state.draggedListIdx, 1);
+                        state.lists.splice(dropIdx, 0, item);
+                        saveData();
+                    }
+                });
+
+                card.onclick = (e) => { if(!e.target.closest('.options-btn')) goToList(list.id); };
+
+                let visualHtml = '';
+                const covers = list.items.filter(i => i.cover).slice(0, 3);
+                if (covers.length > 0) {
+                     visualHtml = `<div class="flex -space-x-4 mb-4 overflow-hidden py-2 pl-2">
+                        ${covers.map(c => `<img src="${c.cover}" class="w-12 h-12 rounded-full border-2 border-neutral-800 object-cover relative z-10 shadow-md">`).join('')}
+                        ${list.items.length > 3 ? `<div class="w-12 h-12 rounded-full bg-neutral-900/50 border-2 border-neutral-800 flex items-center justify-center text-xs text-white z-0 relative backdrop-blur-sm">+${list.items.length - 3}</div>` : ''}
+                     </div>`;
+                } else {
+                    const icon = list.type === 'songs' ? 'music' : 'disc';
+                    visualHtml = `<div class="mb-4 py-2"><div class="w-12 h-12 rounded-full bg-neutral-900/30 flex items-center justify-center"><i data-lucide="${icon}" class="w-6 h-6 text-white/50"></i></div></div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                        ${list.isPinned ? '<i data-lucide="pin" class="w-4 h-4 text-purple-400 fill-current"></i>' : ''}
+                        <button class="options-btn p-2 hover:bg-black/20 rounded-full text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                    </div>
+                    ${visualHtml}
+                    <h3 class="text-xl font-bold text-white mb-1 truncate shadow-black drop-shadow-md">${list.name}</h3>
+                    <div class="flex items-center gap-2 text-sm text-white/60 font-medium">
+                         <span>${list.items.length} Items</span>
+                         <span class="w-1 h-1 rounded-full bg-white/40"></span>
+                         <span class="uppercase text-[10px] tracking-wider">${list.type || 'albums'}</span>
+                         ${list.isMain ? '<span class="ml-auto text-[10px] bg-purple-600 px-1.5 py-0.5 rounded text-white font-bold tracking-wide uppercase">MAIN</span>' : ''}
+                    </div>
+                `;
+                card.querySelector('.options-btn').onclick = (e) => openListOptions(e, list.id);
+                grid.appendChild(card);
+            });
+
+            const addCard = document.createElement('button');
+            addCard.onclick = openListModal;
+            addCard.className = 'border-2 border-dashed border-neutral-700 rounded-2xl p-6 flex flex-col items-center justify-center text-neutral-500 hover:text-white hover:border-neutral-500 transition-colors min-h-[200px] group';
+            addCard.innerHTML = `<div class="bg-neutral-800 p-4 rounded-full mb-4 group-hover:bg-neutral-700 transition-colors shadow-lg"><i data-lucide="plus" class="w-8 h-8"></i></div><span class="font-bold">Create New List</span>`;
+            grid.appendChild(addCard);
+            container.appendChild(grid);
+            els.mainContent.appendChild(container);
+        }
+
+        function renderArtistProfile() {
+            els.mainContent.innerHTML = '';
+            const artistName = state.activeArtistName;
+            const stats = getArtistStats(artistName);
+            const userScore = state.artists[artistName]?.userScore || 0;
+            const profilePic = getArtistProfilePic(artistName);
+            const safeName = artistName.replace(/'/g, "\\'");
+
+            const container = document.createElement('div');
+            container.className = 'p-8 max-w-5xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+
+            container.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-8 mb-12 items-center md:items-start">
+                    <div class="relative group cursor-pointer w-48 h-48 rounded-full overflow-hidden border-4 border-neutral-800 shadow-2xl flex-shrink-0" onclick="document.getElementById('artist-pic-input').click()">
+                        ${profilePic ? `<img src="${profilePic}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-neutral-800 flex items-center justify-center"><i data-lucide="user" class="w-16 h-16 text-neutral-600"></i></div>`}
+                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="camera" class="w-8 h-8 text-white"></i></div>
+                    </div>
+                    <div class="flex-1 text-center md:text-left">
+                        <div class="flex justify-between items-start">
+                            <h1 class="text-4xl md:text-6xl font-black text-white mb-2 tracking-tight">${artistName}</h1>
+                            ${stats.count === 0 ? `<button onclick="deleteArtist('${safeName}')" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg" title="Delete Artist"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                        </div>
+                        <p class="text-neutral-400 text-lg mb-6">${stats.count} Items Ranked in Main List</p>
+                        
+                        <div class="flex flex-col md:flex-row gap-6">
+                            <div class="bg-neutral-800/50 p-4 rounded-xl border border-neutral-700/50">
+                                <div class="text-xs text-neutral-500 uppercase tracking-wider mb-1">Calculated Avg</div>
+                                <div class="text-3xl font-bold text-purple-400">${stats.avg}</div>
+                            </div>
+                            <div class="bg-neutral-800/50 p-4 rounded-xl border border-neutral-700/50 flex-1">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="text-xs text-neutral-500 uppercase tracking-wider">Your Rating (0-10+)</div>
+                                    <div class="text-xl font-bold text-white"><span id="user-score-display">${userScore}</span></div>
+                                </div>
+                                <div class="flex gap-4 items-center">
+                                    <input type="range" id="artist-score-slider" min="0" max="15" step="0.1" value="${userScore}" class="flex-1" oninput="updateArtistUserScore(this.value)">
+                                    <input type="number" id="artist-score-input" value="${userScore}" step="0.1" class="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-white text-center" oninput="updateArtistUserScore(this.value)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    ${state.mainListType === 'albums' ? `
+                    <button onclick="goToArtistAutoList('albums')" class="p-6 bg-neutral-800 rounded-xl border border-neutral-700 hover:border-purple-500 transition-all text-left group">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-blue-900/30 p-2 rounded-lg"><i data-lucide="disc" class="w-6 h-6 text-blue-400"></i></div>
+                            <i data-lucide="arrow-right" class="w-5 h-5 text-neutral-600 group-hover:text-white transition-colors"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Main List Ranking (Albums)</h3>
+                        <p class="text-sm text-neutral-400">View auto-generated ranking based on your Main List.</p>
+                    </button>` : ''}
+                    <button onclick="goToArtistAutoList('songs')" class="p-6 bg-neutral-800 rounded-xl border border-neutral-700 hover:border-purple-500 transition-all text-left group col-span-2 md:col-span-1">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="bg-green-900/30 p-2 rounded-lg"><i data-lucide="music" class="w-6 h-6 text-green-400"></i></div>
+                            <i data-lucide="arrow-right" class="w-5 h-5 text-neutral-600 group-hover:text-white transition-colors"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Main List Ranking (Songs)</h3>
+                        <p class="text-sm text-neutral-400">View all songs ranked by absolute score.</p>
+                    </button>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="openDiscographyList()" class="flex-1 py-3 rounded-lg border border-neutral-600 hover:bg-neutral-800 transition-colors font-bold text-neutral-300">Open Discography List</button>
+                    <button onclick="goToComparison()" class="flex-1 py-3 rounded-lg bg-white text-black hover:bg-neutral-200 transition-colors font-bold">Compare Rankings</button>
+                </div>
+            `;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderGlobalArtistRankings() {
+            els.mainContent.innerHTML = '';
+            
+            const allArtistsSet = new Set();
+            state.library.forEach(l => {
+                if (l.artist) l.artist.split(',').forEach(a => allArtistsSet.add(a.trim()));
+            });
+            const allArtists = [...allArtistsSet];
+            
+            let rankings = allArtists.map(name => {
+                const stats = getArtistStats(name);
+                return { name, ...stats, userScore: state.artists[name]?.userScore || 0 };
+            });
+
+            if (state.mainListType === 'songs') rankings = rankings.filter(r => r.count >= 4);
+
+            const maxAvg = Math.max(...rankings.map(r => parseFloat(r.avg)), 1);
+
+            if (state.globalSort === 'user') rankings.sort((a,b) => b.userScore - a.userScore);
+            else rankings.sort((a,b) => b.avg - a.avg);
+
+            const container = document.createElement('div');
+            container.className = 'p-8 max-w-4xl mx-auto w-full h-full overflow-y-auto custom-scrollbar';
+            const calibratedText = state.calibrateGlobal ? `<span class="text-xs font-normal text-purple-400 ml-2">(Scaled relative to highest)</span>` : '';
+
+            let html = `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold flex items-center">Global Artist Rankings ${calibratedText}</h2>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer bg-neutral-800 px-3 py-1.5 rounded-lg hover:bg-neutral-700 transition-colors">
+                             <span class="text-xs font-bold text-white">Calibrate to 100</span>
+                             <div class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${state.calibrateGlobal ? 'checked' : ''} onchange="toggleCalibration()">
+                                <div class="w-9 h-5 bg-neutral-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                            </div>
+                        </label>
+                        <div class="flex bg-neutral-800 rounded-lg p-1">
+                            <button onclick="setGlobalSort('avg')" class="px-3 py-1 text-xs font-bold rounded ${state.globalSort === 'avg' ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:text-white'}">Avg Score</button>
+                            <button onclick="setGlobalSort('user')" class="px-3 py-1 text-xs font-bold rounded ${state.globalSort === 'user' ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:text-white'}">User Rating</button>
+                        </div>
+                    </div>
+                </div>
+                ${rankings.length === 0 && state.mainListType === 'songs' ? '<div class="text-center text-neutral-500 py-10">Add at least 4 songs for an artist to see them here.</div>' : ''}
+                <div class="space-y-4">
+            `;
+            rankings.forEach((r, i) => {
+                const pic = getArtistProfilePic(r.name);
+                const safeName = r.name.replace(/'/g, "\\'");
+                
+                let displayAvg = r.avg;
+                if (state.calibrateGlobal) displayAvg = ((r.avg / maxAvg) * 100).toFixed(1);
+
+                html += `
+                    <div class="flex items-center gap-4 p-4 bg-neutral-800/50 rounded-xl border border-neutral-800">
+                        <div class="text-2xl font-black text-neutral-600 w-8 text-center">#${i+1}</div>
+                        <img src="${pic || ''}" class="w-12 h-12 rounded-full object-cover bg-neutral-700">
+                        <div class="flex-1 cursor-pointer" onclick="goToArtistProfile('${safeName}')">
+                            <h3 class="text-lg font-bold text-white hover:text-purple-400 transition-colors">${r.name}</h3>
+                            <div class="text-xs text-neutral-500">${r.count} Items</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xl font-bold text-purple-400">${displayAvg}</div>
+                            <div class="text-xs text-neutral-500">Avg Score</div>
+                        </div>
+                        <div class="w-px h-8 bg-neutral-700 mx-2"></div>
+                        <div class="text-right w-16">
+                            <div class="text-lg font-bold text-white">${r.userScore > 0 ? r.userScore : '-'}</div>
+                            <div class="text-xs text-neutral-500">User</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderComparison() {
+            els.mainContent.innerHTML = '';
+            const artistName = state.activeArtistName;
+            const mainList = state.lists.find(l => l.isMain);
+            const discogList = state.lists.find(l => l.name === `Discography: ${artistName}`);
+            
+            const mainItems = mainList ? mainList.items.filter(i => checkArtistMatch(i.artist, artistName)) : [];
+            const userItems = discogList ? discogList.items : [];
+            const allTitles = [...new Set([...mainItems.map(a=>a.title), ...userItems.map(a=>a.title)])];
+
+            const container = document.createElement('div');
+            container.className = 'flex flex-col h-full';
+            
+            let html = `
+                <div class="p-4 border-b border-neutral-800 bg-neutral-900 z-10 flex flex-col md:flex-row justify-between items-center gap-2">
+                    <h2 class="text-xl font-bold">Comparison: ${artistName}</h2>
+                    <div class="text-xs text-purple-400 italic">Absolute Metric Scale</div>
+                    <div class="flex gap-8 text-sm uppercase tracking-widest font-bold text-neutral-500">
+                        <span>Main List</span>
+                        <span>Discography List</span>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                    <div class="space-y-2 max-w-4xl mx-auto">
+            `;
+
+            allTitles.forEach(title => {
+                const mainItem = mainItems.find(a => a.title === title);
+                const userItem = userItems.find(a => a.title === title);
+                
+                const mainScore = mainItem ? mainItem.score.toFixed(1) : 'N/A';
+                const userScore = userItem ? userItem.score.toFixed(1) : 'N/A';
+                const cover = mainItem?.cover || userItem?.cover;
+
+                html += `
+                    <div class="flex items-center bg-neutral-800/40 rounded-lg p-2 border border-neutral-800 hover:border-neutral-600 transition-colors">
+                        <div class="flex-1 text-right pr-4 font-mono font-bold text-blue-400 text-lg">${mainScore}</div>
+                        <div class="w-px h-8 bg-neutral-700"></div>
+                        <div class="flex-initial w-64 px-4 flex items-center gap-3">
+                            <img src="${cover || ''}" class="w-10 h-10 rounded object-cover bg-neutral-700">
+                            <div class="text-sm font-bold text-white truncate">${title}</div>
+                        </div>
+                        <div class="w-px h-8 bg-neutral-700"></div>
+                        <div class="flex-1 text-left pl-4 font-mono font-bold text-purple-400 text-lg">${userScore}</div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+            container.innerHTML = html;
+            els.mainContent.appendChild(container);
+        }
+
+        function renderMainArea() {
+            els.mainContent.innerHTML = '';
+            if (state.viewMode === 'horizontal') renderHorizontalView();
+            else renderVerticalView();
+        }
+
+        function renderHorizontalView() {
+            const items = getCurrentItems();
+            const currentAlbum = getActiveAlbum();
+            const activeList = getActiveList();
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'absolute inset-0 flex flex-col overflow-hidden';
+            
+            const guide = document.createElement('div');
+            guide.className = 'w-full text-center py-4 text-neutral-600 text-sm uppercase tracking-widest font-medium pointer-events-none select-none z-10 bg-neutral-900/50 backdrop-blur-sm shrink-0 flex justify-center items-center gap-4';
+            guide.innerHTML = '<span>Left: Worst &larr;</span> <span class="text-purple-500 font-bold bg-purple-900/20 px-2 py-1 rounded">Absolute Metric Scale</span> <span>&rarr; Right: Best</span>';
+            wrapper.appendChild(guide);
+
+            const scrollArea = document.createElement('div');
+            scrollArea.className = 'flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar relative flex flex-col justify-center';
+            
+            const axisContainer = document.createElement('div');
+            axisContainer.id = 'axis-container';
+            
+            const { min, max, range } = getStats();
+            // 10 units = 100% width. Zoom scales it further.
+            const baseWidthPercent = (range / 10) * 100;
+            const widthPercent = Math.max(100, baseWidthPercent * state.zoomLevel);
+            
+            axisContainer.style.width = `${widthPercent}%`;
+            axisContainer.className = 'h-64 relative flex items-center group select-none transition-all duration-300 min-w-full';
+            
+            const line = document.createElement('div');
+            line.className = 'absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-neutral-700 to-transparent w-full';
+            axisContainer.appendChild(line);
+
+            if (items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'absolute inset-0 flex items-center justify-center text-neutral-600';
+                empty.innerText = 'List is empty.';
+                axisContainer.appendChild(empty);
+            }
+
+            const dynSize = getDynamicSize();
+
+            const exactScores = {};
+            items.forEach(item => {
+                const s = item.score.toFixed(3);
+                if(!exactScores[s]) exactScores[s] = [];
+                exactScores[s].push(item);
+            });
+
+            items.forEach(item => {
+                const percent = ((item.score - min) / range) * 100;
+                
+                const group = exactScores[item.score.toFixed(3)];
+                const indexInGroup = group.indexOf(item);
+                const offsetX = indexInGroup * 15;
+                const offsetY = indexInGroup * 15;
+                
+                const node = document.createElement('div');
+                node.id = `node-${item.id}`;
+                node.className = `absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-75 ease-out hover:scale-110 hover:z-[60]`;
+                node.style.left = `calc(${percent}% + ${offsetX}px)`;
+                node.style.marginTop = `${offsetY}px`;
+                node.style.zIndex = 50 - indexInGroup;
+                node.style.cursor = state.isReadOnly ? 'pointer' : 'grab';
+
+                const isSong = state.currentView === 'album' || state.activeListId === 'auto-songs' || (activeList && activeList.type === 'songs');
+                const coverUrl = item.cover || (currentAlbum ? currentAlbum.cover : '');
+
+                if (!state.isReadOnly) {
+                    node.addEventListener('mousedown', (e) => handleDragStart(e, item.id));
+                    node.addEventListener('touchstart', (e) => handleDragStart(e, item.id));
+                }
+                
+                node.addEventListener('click', (e) => {
+                     if (isSong) openModal(item);
+                     else {
+                         if (state.currentView === 'artistAutoList' && state.activeListId === 'auto-albums') {
+                             const mainList = state.lists.find(l => l.isMain);
+                             if (mainList) goToAlbum(item.id, mainList.id);
+                         } else if(!state.isDragging) goToAlbum(item.id);
+                     }
+                });
+
+                let visual;
+                if (isSong) {
+                    visual = `<div style="width: ${dynSize * 0.8}px; height: ${dynSize * 0.8}px;" class="rounded-full shadow-2xl overflow-hidden border-2 border-neutral-500 group-hover/album:border-white bg-neutral-800 transition-colors relative flex items-center justify-center">
+                        ${coverUrl ? `<img src="${coverUrl}" class="w-full h-full object-cover pointer-events-none opacity-70 group-hover/album:opacity-100">` : `<div class="w-full h-full bg-neutral-700 flex items-center justify-center"><i data-lucide="music-2" class="w-1/2 h-1/2 text-white/50"></i></div>`}
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="w-2 h-2 bg-white rounded-full shadow-sm"></div></div>
+                    </div>`;
+                } else {
+                    visual = `<div style="width: ${dynSize}px; height: ${dynSize}px;" class="rounded-full shadow-2xl overflow-hidden border-2 border-neutral-700 group-hover/album:border-white bg-neutral-800 transition-colors relative">
+                        ${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover pointer-events-none">` : `<div class="w-full h-full bg-gradient-to-br ${item.color || 'from-gray-700 to-gray-900'} flex items-center justify-center"><i data-lucide="disc" class="w-1/2 h-1/2 text-white/20"></i></div>`}
+                    </div>`;
+                }
+
+                const spotifyLinkHtml = item.link && item.link.includes('spotify') ? `
+                    <a href="${item.link}" target="_blank" class="inline-flex mt-2 items-center gap-1 text-[10px] bg-green-500/20 text-green-400 hover:bg-green-500/40 px-2 py-1 rounded transition-colors" onclick="event.stopPropagation()">
+                        <svg viewBox="0 0 24 24" class="w-3 h-3 fill-current"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.84.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.84.241 1.2zM20.16 9.6C16.44 7.38 9.54 7.2 5.58 8.4c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.68-1.38 12.18-1.14 16.5 1.44.54.3.72 1.02.42 1.56-.24.6-.96.78-1.68.3z"/></svg>
+                        Listen
+                    </a>` : '';
+
+                const tooltipContent = `
+                    <h3 class="font-bold text-white truncate">${item.title || 'Untitled'}</h3>
+                    ${!isSong ? `<p class="text-xs text-neutral-400 mb-1 truncate">${item.artist || 'Unknown Artist'}</p>` : ''}
+                    ${item.remarks ? `<div class="mt-2 p-2 bg-black/50 rounded text-[10px] text-left text-neutral-300 italic line-clamp-3">"${item.remarks}"</div>` : ''}
+                    ${spotifyLinkHtml}
+                    <div class="flex justify-center gap-2 mt-2">
+                        <button class="btn-edit-item p-1.5 hover:bg-white/10 rounded-full text-neutral-400 hover:text-white" title="Details"><i data-lucide="${state.isReadOnly ? 'eye' : 'more-vertical'}" class="w-3 h-3"></i></button>
+                    </div>
+                `;
+
+                node.innerHTML = `
+                    <div class="relative group/album">
+                        ${visual}
+                        ${state.showMetrics ? `<div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-neutral-800 text-purple-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-neutral-700 shadow-xl whitespace-nowrap"><span class="metric-val">${getMetric(item.score)}</span></div>` : ''}
+                        <div class="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-48 bg-neutral-900/95 backdrop-blur-md border border-neutral-700 p-3 rounded-xl shadow-2xl opacity-0 invisible group-hover/album:opacity-100 group-hover/album:visible transition-all duration-200 transform translate-y-2 group-hover/album:translate-y-0 text-center z-[100] pointer-events-auto">${tooltipContent}</div>
+                    </div>
+                    <div class="w-px h-6 bg-neutral-700/50 absolute left-1/2 -translate-x-1/2 -top-3 -z-10 group-hover/album:bg-purple-500/50 transition-colors"></div>
+                `;
+
+                node.querySelector('.btn-edit-item').addEventListener('mousedown', e => e.stopPropagation());
+                node.querySelector('.btn-edit-item').addEventListener('click', (e) => { e.stopPropagation(); openModal(item); });
+
+                axisContainer.appendChild(node);
+            });
+
+            scrollArea.appendChild(axisContainer);
+            wrapper.appendChild(scrollArea);
+            els.mainContent.appendChild(wrapper);
+            
+            // Scroll to center initially
+            if(items.length > 0 && !state.isDragging) {
+                setTimeout(() => scrollArea.scrollLeft = (scrollArea.scrollWidth - scrollArea.clientWidth) / 2, 50);
+            }
+        }
+
+        function renderVerticalView() {
+            const list = getCurrentItems();
+            const activeList = getActiveList();
+            const container = document.createElement('div');
+            container.className = 'h-full overflow-y-auto custom-scrollbar p-4 md:p-8 max-w-4xl mx-auto space-y-4';
+            const sorted = [...list].sort((a, b) => b.score - a.score);
+
+            if (sorted.length === 0) container.innerHTML = `<div class="text-center text-neutral-500 mt-20">List is empty.</div>`;
+
+            sorted.forEach((item, index) => {
+                const row = document.createElement('div');
+                const isClickable = (state.currentView === 'list' || state.currentView === 'artistAutoList');
+                row.className = `group flex items-center gap-4 md:gap-6 bg-neutral-800/40 hover:bg-neutral-800/80 p-4 rounded-2xl border border-neutral-800 hover:border-neutral-600 transition-all ${isClickable ? 'cursor-pointer' : ''}`;
+                
+                const isSong = state.currentView === 'album' || state.activeListId === 'auto-songs' || (activeList && activeList.type === 'songs');
+
+                if (isClickable) {
+                    row.onclick = (e) => {
+                        if (e.target.closest('button') || e.target.closest('a')) return;
+                        if (isSong) openModal(item);
+                        else {
+                             if (state.currentView === 'artistAutoList' && state.activeListId === 'auto-albums') {
+                                 const mainList = state.lists.find(l => l.isMain);
+                                 if(mainList) goToAlbum(item.id, mainList.id);
+                             } else goToAlbum(item.id);
+                        }
+                    };
+                }
+
+                const imgHtml = isSong ? 
+                    `<div class="w-12 h-12 rounded-lg bg-neutral-900 flex items-center justify-center flex-shrink-0 text-neutral-500 overflow-hidden">${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover">` : `<i data-lucide="music-2" class="w-5 h-5"></i>`}</div>` : 
+                    `<div class="w-16 h-16 md:w-24 md:h-24 rounded-xl overflow-hidden bg-neutral-900 shadow-lg flex-shrink-0">${item.cover ? `<img src="${item.cover}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-gradient-to-br ${item.color || 'from-gray-700 to-gray-900'} flex items-center justify-center"><i data-lucide="disc" class="w-8 h-8 text-white/20"></i></div>`}</div>`;
+
+                row.innerHTML = `
+                    <div class="text-xl md:text-2xl font-black text-neutral-700 w-8 text-center group-hover:text-neutral-500">#${index + 1}</div>
+                    ${imgHtml}
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-1">
+                            <h3 class="text-lg md:text-2xl font-bold text-white truncate">${item.title}</h3>
+                            ${state.showMetrics ? `<span class="text-xs font-bold bg-neutral-900 text-purple-400 px-2 py-0.5 rounded border border-neutral-700">${getMetric(item.score)}</span>` : ''}
+                        </div>
+                        ${!isSong ? `<p class="text-base text-neutral-400 mb-2">${item.artist}</p>` : ''}
+                        ${item.remarks ? `<p class="text-sm text-neutral-500 italic line-clamp-1">"${item.remarks}"</p>` : ''}
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <button class="btn-list-edit p-2 hover:bg-white/10 rounded-lg text-neutral-400 hover:text-white transition-colors"><i data-lucide="${state.isReadOnly ? 'eye' : 'more-vertical'}" class="w-5 h-5"></i></button>
+                        ${!state.isReadOnly ? `<button class="btn-list-delete p-2 hover:bg-red-500/10 rounded-lg text-neutral-400 hover:text-red-500 transition-colors"><i data-lucide="trash-2" class="w-5 h-5"></i></button>` : ''}
+                    </div>
+                `;
+                row.querySelector('.btn-list-edit').addEventListener('click', (e) => { e.stopPropagation(); openModal(item); });
+                if(!state.isReadOnly) row.querySelector('.btn-list-delete').addEventListener('click', (e) => { e.stopPropagation(); deleteItem(item.id); });
+                container.appendChild(row);
+            });
+            els.mainContent.appendChild(container);
+        }
+
+        // --- List Options ---
+        function openListOptions(e, listId) {
+            e.stopPropagation();
+            state.optionsListId = listId;
+            state.listOptionsOpen = true;
+            state.deleteConfirmState = false; 
+            
+            const list = state.lists.find(l => l.id === listId);
+            els.inputRenameList.value = list.name;
+            
+            els.btnPinList.innerHTML = `<i data-lucide="pin" class="w-4 h-4"></i> ${list.isPinned ? 'Unpin List' : 'Pin to Top'}`;
+            els.btnPinList.className = `w-full flex items-center justify-center gap-2 ${list.isPinned ? 'bg-purple-600 hover:bg-purple-500' : 'bg-neutral-800 hover:bg-neutral-700'} text-white py-2.5 rounded-lg font-bold transition-colors`;
+            els.btnPinList.onclick = () => togglePinList();
+
+            if(list.isMain) els.btnDeleteList.classList.add('hidden');
+            else {
+                els.btnDeleteList.classList.remove('hidden');
+                els.btnDeleteList.innerHTML = `<i data-lucide="trash-2" class="w-4 h-4"></i> Delete List`;
+                els.btnDeleteList.className = "w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg font-bold transition-colors";
+            }
+            
+            els.listOptionsOverlay.classList.remove('hidden');
+            setTimeout(() => els.listOptionsOverlay.classList.remove('opacity-0'), 10);
+            lucide.createIcons({ root: els.listOptionsOverlay });
+        }
+
+        function togglePinList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) { list.isPinned = !list.isPinned; saveData(); closeOptionsModal(); }
+        }
+
+        function closeOptionsModal() {
+            state.listOptionsOpen = false;
+            state.optionsListId = null;
+            els.listOptionsOverlay.classList.add('opacity-0');
+            setTimeout(() => els.listOptionsOverlay.classList.add('hidden'), 200);
+        }
+
+        function renameList(newName) {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) { list.name = newName; renderDashboard(); lucide.createIcons({ root: els.mainContent }); }
+        }
+
+        function updateListColor(colorClass) {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list) { list.color = colorClass; renderDashboard(); lucide.createIcons({ root: els.mainContent }); }
+        }
+
+        function deleteList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(list.isMain) return showToast("Cannot delete the Main List.");
+
+            if (!state.deleteConfirmState) {
+                state.deleteConfirmState = true;
+                els.btnDeleteList.innerText = "Confirm Delete?";
+                els.btnDeleteList.className = "w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-bold transition-colors";
+                return;
+            }
+            state.lists = state.lists.filter(l => l.id !== state.optionsListId);
+            saveData();
+            closeOptionsModal();
+            showToast("List deleted.");
+        }
+
+        function shareList() {
+            const list = state.lists.find(l => l.id === state.optionsListId);
+            if(!list) return;
+            const cleanItems = list.items.map(item => {
+                const copy = { ...item };
+                if (copy.cover && copy.cover.startsWith('data:')) copy.cover = null; 
+                return copy;
+            });
+            const exportData = { name: list.name, color: list.color, items: cleanItems, type: list.type };
+            navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => showToast("List data copied!"));
+        }
+
+        // --- Drag Logic ---
+        function handleDragStart(e, id) {
+            if (state.viewMode !== 'horizontal' || state.isReadOnly) return;
+            state.isDragging = true;
+            state.draggedId = id;
+            state.isClickCandidate = true;
+            state.dragStartX = e.touches ? e.touches[0].clientX : e.clientX;
+            
+            const node = document.getElementById(`node-${id}`);
+            if (node) { node.style.zIndex = 100; node.classList.add('dragging'); }
+        }
+
+        function handleDragMove(e) {
+            if (!state.isDragging || !state.draggedId) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            if (state.isClickCandidate && Math.abs(clientX - state.dragStartX) > 5) state.isClickCandidate = false;
+
+            const container = document.getElementById('axis-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            
+            // Calculate Absolute Score
+            const percentage = (clientX - rect.left) / rect.width;
+            const { min, range } = getStats();
+            let newScore = min + (percentage * range);
+
+            if (state.currentView === 'album') {
+                const album = getActiveAlbum();
+                album.songs = album.songs.map(s => s.id === state.draggedId ? { ...s, score: newScore } : s);
+            } else if (state.currentView === 'list') {
+                const list = getActiveList();
+                list.items = list.items.map(i => i.id === state.draggedId ? { ...i, score: newScore } : i);
+            }
+
+            const node = document.getElementById(`node-${state.draggedId}`);
+            if (node) {
+                const percent = ((newScore - min) / range) * 100;
+                node.style.left = `calc(${percent}%)`;
+                node.style.marginTop = `0px`; // reset stack offset while dragging
+                if (state.showMetrics) {
+                    const m = node.querySelector('.metric-val');
+                    if(m) m.innerText = getMetric(newScore);
+                }
+            }
+        }
+
+        function handleDragEnd() {
+            if (state.isDragging) {
+                if (state.isClickCandidate) {
+                    const list = getActiveList();
+                    const isSong = state.currentView === 'album' || (list && list.type === 'songs');
+                    if (isSong) { const s = getCurrentItems().find(x => x.id === state.draggedId); openModal(s); }
+                    else if (state.currentView === 'list') goToAlbum(state.draggedId);
+                } else {
+                    saveData(); // Save new absolute score, min/max expands naturally
+                    render();
+                }
+                const node = document.getElementById(`node-${state.draggedId}`);
+                if (node) node.classList.remove('dragging');
+                state.isDragging = false;
+                state.draggedId = null;
+            }
+        }
+
+        // --- Library Search & Misc ---
+        function renderLibraryResults(results) {
+            els.libraryResults.innerHTML = '';
+            els.libraryResults.classList.remove('hidden');
+            if (results.length === 0) return els.libraryResults.innerHTML = '<div class="text-xs text-neutral-500 p-2 text-center">No matches found.</div>';
+            results.forEach(libItem => {
+                const el = document.createElement('div');
+                el.className = 'flex items-center gap-3 p-2 rounded hover:bg-neutral-800 cursor-pointer';
+                el.innerHTML = `
+                    <img src="${libItem.cover || ''}" class="w-8 h-8 rounded object-cover bg-neutral-700">
+                    <div class="flex-1 min-w-0"><div class="text-sm font-bold text-white truncate">${libItem.title}</div><div class="text-xs text-neutral-500 truncate">${libItem.artist}</div></div>
+                    <i data-lucide="plus" class="w-4 h-4 text-purple-500"></i>
+                `;
+                el.onclick = () => {
+                    state.tempItem = { ...libItem, remarks: '' };
+                    state.editMode = false;
+                    els.inputCoverUrl.value = (libItem.cover && !libItem.cover.startsWith('data:')) ? libItem.cover : '';
+                    updateModalUI();
+                    els.libraryResults.classList.add('hidden');
+                };
+                els.libraryResults.appendChild(el);
+            });
+            lucide.createIcons({ root: els.libraryResults });
+        }
+
+        function handleArtistInput(e) {
+            const query = e.target.value.toLowerCase();
+            state.tempItem.artist = e.target.value;
+            if (query.length < 1) return els.artistSuggestions.classList.add('hidden');
+            
+            const allArtistsSet = new Set();
+            state.library.forEach(l => { if (l.artist) l.artist.split(',').forEach(a => allArtistsSet.add(a.trim())); });
+            const artists = [...allArtistsSet];
+            
+            const matches = artists.filter(a => a.toLowerCase().includes(query));
+            if (matches.length > 0) {
+                els.artistSuggestions.innerHTML = '';
+                matches.forEach(artist => {
+                    const div = document.createElement('div');
+                    div.className = 'px-4 py-2 hover:bg-neutral-700 cursor-pointer text-sm text-white';
+                    div.innerText = artist;
+                    div.onclick = () => {
+                        // Append if comma is typed, otherwise replace
+                        const current = els.inputArtist.value;
+                        const lastComma = current.lastIndexOf(',');
+                        if (lastComma !== -1) els.inputArtist.value = current.substring(0, lastComma + 1) + ' ' + artist;
+                        else els.inputArtist.value = artist;
+                        
+                        state.tempItem.artist = els.inputArtist.value;
+                        els.artistSuggestions.classList.add('hidden');
+                    };
+                    els.artistSuggestions.appendChild(div);
+                });
+                els.artistSuggestions.classList.remove('hidden');
+            } else els.artistSuggestions.classList.add('hidden');
+        }
+
+        function handleGlobalSearch(e) {
+            const query = e.target.value.toLowerCase();
+            if (query.length < 1) return els.searchResults.classList.add('hidden');
+            els.searchResults.innerHTML = '';
+            els.searchResults.classList.remove('hidden');
+
+            const lists = state.lists.filter(l => l.name.toLowerCase().includes(query));
+            
+            const allArtistsSet = new Set();
+            state.library.forEach(l => { if (l.artist) l.artist.split(',').forEach(a => allArtistsSet.add(a.trim())); });
+            const artists = [...allArtistsSet].filter(a => a.toLowerCase().includes(query));
+            
+            if(artists.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Artists</div>`;
+                artists.forEach(a => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    el.innerHTML = `<div class="w-8 h-8 rounded-full bg-purple-900/50 flex items-center justify-center"><i data-lucide="mic-2" class="w-4 h-4 text-purple-400"></i></div><span class="font-bold text-white">${a}</span>`;
+                    const safeName = a.replace(/'/g, "\\'");
+                    el.onclick = () => goToArtistProfile(safeName);
+                    els.searchResults.appendChild(el);
+                });
+            }
+            if(lists.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Lists</div>`;
+                lists.forEach(l => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    el.innerHTML = `<div class="w-8 h-8 rounded-full ${l.color} flex items-center justify-center"><i data-lucide="list" class="w-4 h-4 text-white"></i></div><span class="font-bold text-white">${l.name}</span>`;
+                    el.onclick = () => { goToList(l.id); els.searchResults.classList.add('hidden'); };
+                    els.searchResults.appendChild(el);
+                });
+            }
+
+            const matchedItems = [];
+            const seenItems = new Set();
+            
+            state.lists.forEach(list => {
+                list.items.forEach(item => {
+                    const key = `${item.title.toLowerCase()}|${item.artist.toLowerCase()}`;
+                    if (item.title.toLowerCase().includes(query) && !seenItems.has(key)) {
+                        seenItems.add(key);
+                        matchedItems.push({ item, listName: list.name, listId: list.id, type: list.type });
+                    }
+                });
+            });
+
+            if (matchedItems.length > 0) {
+                els.searchResults.innerHTML += `<div class="px-4 py-2 text-xs font-bold text-neutral-500 uppercase bg-neutral-800/50">Items</div>`;
+                matchedItems.forEach(match => {
+                    const el = document.createElement('div');
+                    el.className = 'px-4 py-3 hover:bg-neutral-800 cursor-pointer flex items-center gap-3 border-b border-neutral-800';
+                    const icon = match.type === 'songs' ? 'music' : 'disc';
+                    el.innerHTML = `
+                        <img src="${match.item.cover || ''}" class="w-8 h-8 rounded object-cover bg-neutral-700">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-white text-sm">${match.item.title}</div>
+                            <div class="text-xs text-neutral-500">in ${match.listName}</div>
+                        </div>
+                    `;
+                    el.onclick = () => { 
+                        if (match.type === 'songs') goToList(match.listId);
+                        else goToAlbum(match.item.id, match.listId); 
+                        els.searchResults.classList.add('hidden'); 
+                    };
+                    els.searchResults.appendChild(el);
+                });
+            }
+            lucide.createIcons({ root: els.searchResults });
+        }
+
+        // Global exposing
+        window.goHome = goHome;
+        window.goBack = goBack;
+        window.toggleMetrics = toggleMetrics;
+        window.toggleCalibration = toggleCalibration;
+        window.setViewMode = setViewMode;
+        window.openModal = openModal;
+        window.openListModal = openListModal;
+        window.zoomIn = zoomIn;
+        window.zoomOut = zoomOut;
+        window.goToArtistProfile = goToArtistProfile;
+        window.goToArtistAutoList = goToArtistAutoList;
+        window.goToComparison = goToComparison;
+        window.goToGlobalArtistRankings = goToGlobalArtistRankings;
+        window.handleArtistPicUpload = handleArtistPicUpload;
+        window.updateArtistUserScore = updateArtistUserScore;
+        window.setGlobalSort = setGlobalSort;
+        window.deleteArtist = deleteArtist;
+        window.openDiscographyList = openDiscographyList;
+        window.selectMainListType = selectMainListType;
+        window.openSettingsModal = openSettingsModal;
+        window.closeSettingsModal = closeSettingsModal;
+        window.authSpotify = authSpotify;
+        window.fetchSpotifyData = fetchSpotifyData;
+
+        // Init
+        setupEventListeners(); 
+        
+        function setupEventListeners() {
+            els.btnCloseModal.addEventListener('click', closeModal);
+            els.modalOverlay.addEventListener('click', (e) => { if(e.target===els.modalOverlay) closeModal(); });
+            els.btnCloseListModal.addEventListener('click', () => { els.listModalOverlay.classList.add('hidden'); });
+            els.btnCloseOptionsModal.addEventListener('click', closeOptionsModal);
+            els.settingsModalOverlay.addEventListener('click', (e) => { if(e.target===els.settingsModalOverlay) closeSettingsModal(); });
+            
+            els.coverTrigger.addEventListener('click', () => els.fileInput.click());
+            els.fileInput.addEventListener('change', handleImageUpload);
+            els.inputCoverUrl.addEventListener('input', (e) => { state.tempItem.cover = e.target.value; updateModalUI(); });
+            els.btnSave.addEventListener('click', saveItem);
+            els.btnDelete.addEventListener('click', () => { if(state.editId) deleteItem(state.editId); closeModal(); });
+            
+            ['inputTitle', 'inputLink', 'inputRemarks'].forEach(k => {
+                els[k].addEventListener('input', (e) => {
+                    const f = k.replace('input', '').toLowerCase();
+                    state.tempItem[f] = e.target.value;
+                });
+            });
+            els.inputArtist.addEventListener('input', handleArtistInput);
+            document.addEventListener('click', (e) => { if(!e.target.closest('#field-artist-container')) els.artistSuggestions.classList.add('hidden'); });
+            
+            els.inputSearchLib.addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase();
+                if(q.length < 2) return els.libraryResults.classList.add('hidden');
+                const results = state.library.filter(i => i.title.toLowerCase().includes(q) || (i.artist && i.artist.toLowerCase().includes(q)));
+                renderLibraryResults(results);
+            });
+
+            els.btnCreateList.addEventListener('click', createNewList);
+            els.btnImportList.addEventListener('click', importList);
+            els.btnDeleteList.addEventListener('click', deleteList);
+            els.btnShareList.addEventListener('click', shareList);
+            els.inputRenameList.addEventListener('input', (e) => renameList(e.target.value));
+            els.tabCreate.addEventListener('click', () => setListModalTab('create'));
+            els.tabImport.addEventListener('click', () => setListModalTab('import'));
+
+            window.addEventListener('mousemove', handleDragMove);
+            window.addEventListener('mouseup', handleDragEnd);
+            window.addEventListener('touchmove', handleDragMove, {passive:false});
+            window.addEventListener('touchend', handleDragEnd);
+            
+            els.artistPicInput.addEventListener('change', handleArtistPicUpload);
+        }
+
+        init(); 
+
+    </script>
 </body>
 </html>
