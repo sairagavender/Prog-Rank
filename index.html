@@ -21,7 +21,7 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #525252; }
 
         /* Dragging Classes */
-        .dragging { opacity: 0.5; border: 2px dashed #a855f7; }
+        .dragging { opacity: 0.5; border: 2px dashed #a855f7; z-index: 1000 !important; }
         
         /* Animation */
         @keyframes fadeInOut {
@@ -328,7 +328,7 @@
             library: [],
             lists: [],
             artists: {}, 
-            migratedToAbsolute: false, // FLAG FOR ABSOLUTE SCALING MIGRATION
+            migratedToAbsolute: false, 
             
             history: [], 
             currentView: 'dashboard', 
@@ -340,13 +340,17 @@
             showMetrics: false,
             zoomLevel: 1,
             isReadOnly: false, 
-            globalSort: 'avg', // 'avg' | 'user'
+            globalSort: 'avg', 
             calibrateGlobal: false, 
             
             isDragging: false,
             draggedId: null,
             dragStartX: 0,
+            dragLastX: 0,
+            edgeDirection: 0,
+            edgePushFrame: null,
             isClickCandidate: false,
+            dragStartStats: null,
             
             modalOpen: false,
             editMode: false,
@@ -871,6 +875,18 @@
                 max = Math.max(10, ...scores);
             }
             return { min, max, range: max - min || 10 };
+        }
+
+        function getPaddedStats() {
+            const stats = getStats();
+            // Just add 10% padding so items aren't directly on the screen edge
+            const pad = Math.max(1, stats.range * 0.1); 
+            return {
+                ...stats,
+                paddedMin: stats.min - pad,
+                paddedMax: stats.max + pad,
+                paddedRange: stats.range + (pad * 2)
+            };
         }
 
         function getMetric(score) {
@@ -1599,10 +1615,8 @@
             const axisContainer = document.createElement('div');
             axisContainer.id = 'axis-container';
             
-            const { min, max, range } = getStats();
-            // 10 units = 100% width. Zoom scales it further.
-            const baseWidthPercent = (range / 10) * 100;
-            const widthPercent = Math.max(100, baseWidthPercent * state.zoomLevel);
+            const stats = getPaddedStats();
+            const widthPercent = 100 * state.zoomLevel;
             
             axisContainer.style.width = `${widthPercent}%`;
             axisContainer.className = 'h-64 relative flex items-center group select-none transition-all duration-300 min-w-full';
@@ -1628,7 +1642,7 @@
             });
 
             items.forEach(item => {
-                const percent = ((item.score - min) / range) * 100;
+                const percent = ((item.score - stats.paddedMin) / stats.paddedRange) * 100;
                 
                 const group = exactScores[item.score.toFixed(3)];
                 const indexInGroup = group.indexOf(item);
@@ -1652,6 +1666,7 @@
                 }
                 
                 node.addEventListener('click', (e) => {
+                     if (e.target.closest('.tooltip-container')) return; // Ignore clicks if they happened inside the tooltip popup
                      if (isSong) openModal(item);
                      else {
                          if (state.currentView === 'artistAutoList' && state.activeListId === 'auto-albums') {
@@ -1674,7 +1689,7 @@
                 }
 
                 const spotifyLinkHtml = item.link && item.link.includes('spotify') ? `
-                    <a href="${item.link}" target="_blank" class="inline-flex mt-2 items-center gap-1 text-[10px] bg-green-500/20 text-green-400 hover:bg-green-500/40 px-2 py-1 rounded transition-colors" onclick="event.stopPropagation()">
+                    <a href="${item.link}" target="_blank" class="inline-flex mt-2 items-center gap-1 text-[10px] bg-green-500/20 text-green-400 hover:bg-green-500/40 px-2 py-1 rounded transition-colors">
                         <svg viewBox="0 0 24 24" class="w-3 h-3 fill-current"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.84.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.84.241 1.2zM20.16 9.6C16.44 7.38 9.54 7.2 5.58 8.4c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.68-1.38 12.18-1.14 16.5 1.44.54.3.72 1.02.42 1.56-.24.6-.96.78-1.68.3z"/></svg>
                         Listen
                     </a>` : '';
@@ -1693,7 +1708,7 @@
                     <div class="relative group/album">
                         ${visual}
                         ${state.showMetrics ? `<div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-neutral-800 text-purple-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-neutral-700 shadow-xl whitespace-nowrap"><span class="metric-val">${getMetric(item.score)}</span></div>` : ''}
-                        <div class="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-48 bg-neutral-900/95 backdrop-blur-md border border-neutral-700 p-3 rounded-xl shadow-2xl opacity-0 invisible group-hover/album:opacity-100 group-hover/album:visible transition-all duration-200 transform translate-y-2 group-hover/album:translate-y-0 text-center z-[100] pointer-events-auto">${tooltipContent}</div>
+                        <div class="absolute top-full mt-4 left-1/2 -translate-x-1/2 w-48 bg-neutral-900/95 backdrop-blur-md border border-neutral-700 p-3 rounded-xl shadow-2xl opacity-0 invisible group-hover/album:opacity-100 group-hover/album:visible transition-all duration-200 transform translate-y-2 group-hover/album:translate-y-0 text-center z-[100] pointer-events-auto tooltip-container">${tooltipContent}</div>
                     </div>
                     <div class="w-px h-6 bg-neutral-700/50 absolute left-1/2 -translate-x-1/2 -top-3 -z-10 group-hover/album:bg-purple-500/50 transition-colors"></div>
                 `;
@@ -1707,11 +1722,6 @@
             scrollArea.appendChild(axisContainer);
             wrapper.appendChild(scrollArea);
             els.mainContent.appendChild(wrapper);
-            
-            // Scroll to center initially
-            if(items.length > 0 && !state.isDragging) {
-                setTimeout(() => scrollArea.scrollLeft = (scrollArea.scrollWidth - scrollArea.clientWidth) / 2, 50);
-            }
         }
 
         function renderVerticalView() {
@@ -1846,67 +1856,130 @@
             navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => showToast("List data copied!"));
         }
 
-        // --- Drag Logic ---
+        // --- Core Dragging & Score Application Logic ---
+        function applyDragDelta(deltaScore) {
+            const listItems = state.currentView === 'album' ? getActiveAlbum().songs : getActiveList().items;
+            const item = listItems.find(i => i.id === state.draggedId);
+            if (!item) return;
+
+            let currentScore = item.score;
+            
+            // Friction mechanics: If going beyond 0 or 10, slow the drag speed down
+            if ((currentScore >= 10 && deltaScore > 0) || (currentScore <= 0 && deltaScore < 0)) {
+                deltaScore *= 0.2; // 5x harder to push beyond the initial metric limits
+            }
+
+            item.score = currentScore + deltaScore;
+
+            // Instantly render visual DOM updates live without tearing down
+            const liveStats = getPaddedStats();
+            listItems.forEach(it => {
+                const node = document.getElementById(`node-${it.id}`);
+                if (node) {
+                    const percent = ((it.score - liveStats.paddedMin) / liveStats.paddedRange) * 100;
+                    node.style.left = `calc(${percent}%)`;
+                    if (it.id === state.draggedId) {
+                        node.style.marginTop = `0px`; // pull out of the stack during dragging
+                        if (state.showMetrics) {
+                            const m = node.querySelector('.metric-val');
+                            if (m) m.innerText = getMetric(item.score);
+                        }
+                    }
+                }
+            });
+        }
+
+        function edgePushLoop() {
+            if (!state.isDragging) return;
+            
+            // Auto-scroll push effect while holding cursor at the edge
+            if (state.edgeDirection !== 0) {
+                const container = document.getElementById('axis-container');
+                if (container) {
+                    const rect = container.getBoundingClientRect();
+                    const pixelsPerUnit = rect.width / state.dragStartStats.paddedRange;
+                    // Automatically add the equivalent of 12 pixels per frame of movement
+                    const deltaScore = (state.edgeDirection * 12) / pixelsPerUnit;
+                    applyDragDelta(deltaScore);
+                }
+            }
+            
+            state.edgePushFrame = requestAnimationFrame(edgePushLoop);
+        }
+
         function handleDragStart(e, id) {
+            if (e.target.closest('.tooltip-container')) return; 
             if (state.viewMode !== 'horizontal' || state.isReadOnly) return;
+            
             state.isDragging = true;
             state.draggedId = id;
             state.isClickCandidate = true;
-            state.dragStartX = e.touches ? e.touches[0].clientX : e.clientX;
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            state.dragStartX = clientX;
+            state.dragLastX = clientX;
+            state.edgeDirection = 0;
+            state.dragStartStats = getPaddedStats(); 
             
             const node = document.getElementById(`node-${id}`);
             if (node) { node.style.zIndex = 100; node.classList.add('dragging'); }
+            
+            document.body.style.cursor = 'grabbing';
+            
+            // Start the boundary edge-pushing loop
+            if (state.edgePushFrame) cancelAnimationFrame(state.edgePushFrame);
+            state.edgePushFrame = requestAnimationFrame(edgePushLoop);
         }
 
         function handleDragMove(e) {
-            if (!state.isDragging || !state.draggedId) return;
+            if (!state.isDragging || !state.draggedId || !state.dragStartStats) return;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            
             if (state.isClickCandidate && Math.abs(clientX - state.dragStartX) > 5) state.isClickCandidate = false;
 
-            const container = document.getElementById('axis-container');
-            if (!container) return;
-            const rect = container.getBoundingClientRect();
-            
-            // Calculate Absolute Score
-            const percentage = (clientX - rect.left) / rect.width;
-            const { min, range } = getStats();
-            let newScore = min + (percentage * range);
+            const deltaX = clientX - state.dragLastX;
+            state.dragLastX = clientX;
 
-            if (state.currentView === 'album') {
-                const album = getActiveAlbum();
-                album.songs = album.songs.map(s => s.id === state.draggedId ? { ...s, score: newScore } : s);
-            } else if (state.currentView === 'list') {
-                const list = getActiveList();
-                list.items = list.items.map(i => i.id === state.draggedId ? { ...i, score: newScore } : i);
-            }
+            // Determine if the mouse cursor is at the edges of the screen (triggers push loop)
+            const edgeThreshold = 40;
+            if (clientX < edgeThreshold) state.edgeDirection = -1; // Pushing left
+            else if (clientX > window.innerWidth - edgeThreshold) state.edgeDirection = 1; // Pushing right
+            else state.edgeDirection = 0;
 
-            const node = document.getElementById(`node-${state.draggedId}`);
-            if (node) {
-                const percent = ((newScore - min) / range) * 100;
-                node.style.left = `calc(${percent}%)`;
-                node.style.marginTop = `0px`; // reset stack offset while dragging
-                if (state.showMetrics) {
-                    const m = node.querySelector('.metric-val');
-                    if(m) m.innerText = getMetric(newScore);
-                }
+            if (deltaX !== 0) {
+                const container = document.getElementById('axis-container');
+                if (!container) return;
+                const rect = container.getBoundingClientRect();
+                
+                // Map the raw mouse pixel movement to the line's metric scale
+                const pixelsPerUnit = rect.width / state.dragStartStats.paddedRange;
+                const deltaScore = deltaX / pixelsPerUnit;
+                
+                applyDragDelta(deltaScore);
             }
         }
 
         function handleDragEnd() {
             if (state.isDragging) {
+                document.body.style.cursor = '';
+                cancelAnimationFrame(state.edgePushFrame); // Stop the infinite scroll edge-pusher
+                state.edgeDirection = 0;
+                
                 if (state.isClickCandidate) {
                     const list = getActiveList();
                     const isSong = state.currentView === 'album' || (list && list.type === 'songs');
                     if (isSong) { const s = getCurrentItems().find(x => x.id === state.draggedId); openModal(s); }
                     else if (state.currentView === 'list') goToAlbum(state.draggedId);
                 } else {
-                    saveData(); // Save new absolute score, min/max expands naturally
-                    render();
+                    saveData(); 
+                    render(); // Re-render naturally settles and bounds the newly positioned line
                 }
+                
                 const node = document.getElementById(`node-${state.draggedId}`);
                 if (node) node.classList.remove('dragging');
                 state.isDragging = false;
                 state.draggedId = null;
+                state.dragStartStats = null;
             }
         }
 
@@ -2064,8 +2137,6 @@
         window.fetchSpotifyData = fetchSpotifyData;
 
         // Init
-        setupEventListeners(); 
-        
         function setupEventListeners() {
             els.btnCloseModal.addEventListener('click', closeModal);
             els.modalOverlay.addEventListener('click', (e) => { if(e.target===els.modalOverlay) closeModal(); });
