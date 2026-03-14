@@ -1,0 +1,35 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+
+body { font-family: 'Inter', sans-serif; }
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #171717; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #525252; }
+
+/* Dragging Classes */
+.dragging { opacity: 0.5; border: 2px dashed #a855f7; z-index: 1000 !important; }
+
+/* Animation */
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); }
+}
+.notification-toast { animation: fadeInOut 3s forwards; }
+
+/* Range Slider */
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px; width: 16px;
+    border-radius: 50%; background: #a855f7;
+    cursor: pointer; margin-top: -6px;
+}
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%; height: 4px;
+    cursor: pointer; background: #404040;
+    border-radius: 2px;
+}
