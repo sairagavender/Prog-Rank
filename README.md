@@ -1,6 +1,6 @@
 # Prog Rank
 
-A browser-based music ranking tool. No backend, no account, no install. Open the HTML file and start ranking.
+A browser-based music ranking tool. No backend, no account, no install. Open and start ranking.
 
 **Live:** https://prog-rank.vercel.app
 
